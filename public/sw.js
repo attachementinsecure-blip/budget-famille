@@ -1,5 +1,5 @@
 // Budget Famille — service worker « réseau d'abord »
-const CACHE = 'budget-famille-v1.0.0';
+const CACHE = 'budget-famille-v1.2.0';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
