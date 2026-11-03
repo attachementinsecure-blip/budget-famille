@@ -1,29 +1,32 @@
 import { useState } from 'react';
-import { Plus, ArrowDownCircle, Download, Copy } from 'lucide-react';
+import { Plus, ArrowDownCircle, Download, Copy, FileUp } from 'lucide-react';
 import { useApp, useOperations } from './contexte.jsx';
 import { NavPeriode, Tuile, useFlash } from './ui.jsx';
 import ListeOps from './ListeOps.jsx';
-import { periodeMois, decaler, eur } from './format.js';
+import { periodeMois, decaler, eur, AVEC_IVA } from './format.js';
 import { bilanPro } from './calculs.js';
 
 const csvCellule = (v) => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 const nombreCsv = (n) => (Number(n) || 0).toFixed(2).replace('.', ',');
 
 export default function Pro({ ouvrir }) {
-  const { activites, membres } = useApp();
+  const { activites, toutesActivites, membres, aller } = useApp();
   const flash = useFlash();
   const [ref, setRef] = useState(new Date());
   const [act, setAct] = useState('');
   const p = periodeMois(ref);
   const { ops } = useOperations(p.debut, p.fin);
   const b = bilanPro(ops, p, act || null);
-  const nomAct = (id) => activites.find((a) => a.id === id)?.nom || '';
+  const nomAct = (id) => toutesActivites.find((a) => a.id === id)?.nom || '';
 
   function exporter() {
-    const tete = ['Date', 'Activité', 'Type', 'Catégorie', 'Description', 'Client/Fournisseur', 'NIF', 'TTC', 'Taux IVA', 'IVA', 'HT', 'Justificatif'];
+    const tete = AVEC_IVA
+      ? ['Date', 'Activité', 'Type', 'Motif', 'Description', 'Client/Fournisseur', 'NIF', 'TTC', 'Taux IVA', 'IVA', 'HT', 'Payé en', 'Justificatif']
+      : ['Date', 'Activité', 'Type', 'Motif', 'Description', 'Client/Fournisseur', 'Montant', 'Payé en', 'Justificatif'];
     const lignes = [...b.ops].sort((x, y) => x.date_op.localeCompare(y.date_op)).map((o) => [
-      o.date_op, nomAct(o.activite_id), o.sens === 'rentree' ? 'Recette' : 'Frais', o.categorie, o.libelle, o.fournisseur, o.nif,
-      nombreCsv(o.montant), o.iva_taux ?? '', nombreCsv(o.iva_montant), nombreCsv(o.montant - (o.iva_montant || 0)), o.justificatif ? 'oui' : 'NON',
+      o.date_op, nomAct(o.activite_id), o.sens === 'rentree' ? 'Recette' : 'Frais', o.categorie, o.libelle, o.fournisseur,
+      ...(AVEC_IVA ? [o.nif, nombreCsv(o.montant), o.iva_taux ?? '', nombreCsv(o.iva_montant), nombreCsv(o.montant - (o.iva_montant || 0))] : [nombreCsv(o.montant)]),
+      o.moyen === 'especes' ? 'Espèces' : o.moyen === 'virement' ? 'Virement' : o.moyen === 'carte' ? 'Carte' : '', o.justificatif ? 'oui' : 'NON',
     ]);
     const csv = '\uFEFF' + [tete, ...lignes].map((l) => l.map(csvCellule).join(';')).join('\r\n');
     const a = document.createElement('a');
@@ -37,13 +40,10 @@ export default function Pro({ ouvrir }) {
     const t = [
       `Compte rendu pro — ${p.label}${act ? ' — ' + nomAct(act) : ''}`,
       '',
-      `Recettes (TTC) : ${eur(b.recettes)}`,
+      `Recettes : ${eur(b.recettes)}`,
       `Commissions des plateformes : ${eur(b.commissions)}`,
-      `Autres frais (TTC) : ${eur(b.frais)}`,
-      `IVA collectée : ${eur(b.ivaCollectee)}`,
-      `IVA déductible : ${eur(b.ivaDeductible)}`,
-      `IVA à reverser : ${eur(b.ivaAPayer)}`,
-      `Résultat hors IVA : ${eur(b.resultatHT)}`,
+      `Autres frais : ${eur(b.frais)}`,
+      ...(AVEC_IVA ? [`IVA collectée : ${eur(b.ivaCollectee)}`, `IVA déductible : ${eur(b.ivaDeductible)}`, `IVA à reverser : ${eur(b.ivaAPayer)}`, `Résultat hors IVA : ${eur(b.resultatHT)}`] : [`Résultat : ${eur(b.resultatHT)}`]),
       '',
       `${b.ops.length} opération(s), dont ${b.sansJustif.length} sans justificatif.`,
       ...b.sansJustif.map((o) => `  - ${o.date_op} ${o.libelle || o.categorie} ${eur(o.montant)}`),
@@ -58,7 +58,7 @@ export default function Pro({ ouvrir }) {
     <div className="page">
       <section className="bandeau">
         <NavPeriode label={p.label} onPrec={() => setRef(decaler(ref, 'mois', -1))} onSuiv={() => setRef(decaler(ref, 'mois', 1))} />
-        <p className="bandeau-label">Résultat hors IVA</p>
+        <p className="bandeau-label">{AVEC_IVA ? 'Résultat hors IVA' : 'Résultat du mois'}</p>
         <p className="bandeau-chiffre">{eur(b.resultatHT)}</p>
         {activites.length > 1 && (
           <select className="select-bandeau" value={act} onChange={(e) => setAct(e.target.value)}>
@@ -73,11 +73,14 @@ export default function Pro({ ouvrir }) {
         <button className="btn btn-second btn-grand" onClick={() => ouvrir({ espace: 'pro', sens: 'depense', activite_id: act || undefined })}><Plus size={22} /> Frais</button>
       </div>
 
+      <button className="btn btn-second btn-plein" onClick={() => aller('releve')}><FileUp size={18} /> Importer un relevé bancaire</button>
+
       <div className="tuiles">
         <Tuile label="Recettes" valeur={eur(b.recettes)} ton="succes" />
         <Tuile label="Commissions" valeur={eur(b.commissions)} ton="encours" />
         <Tuile label="Autres frais" valeur={eur(b.frais)} ton="encours" />
-        <Tuile label="IVA à reverser" valeur={eur(b.ivaAPayer)} ton="info" sous={`${eur(b.ivaCollectee)} collectée, ${eur(b.ivaDeductible)} déductible`} />
+        {AVEC_IVA ? <Tuile label="IVA à reverser" valeur={eur(b.ivaAPayer)} ton="info" sous={`${eur(b.ivaCollectee)} collectée, ${eur(b.ivaDeductible)} déductible`} />
+          : <Tuile label="Résultat" valeur={eur(b.resultatHT)} ton={b.resultatHT >= 0 ? 'succes' : 'erreur'} />}
       </div>
 
       {b.sansJustif.length > 0 && (

@@ -4,6 +4,7 @@ import { useApp, useOperations, useFixes } from './contexte.jsx';
 import { NavPeriode, Modal, Champ, Tabs, ChoixPersonnes, Pastille, Vide, useFlash, Confirmer } from './ui.jsx';
 import { supabase, enregistrer, messageClair, nouvelId } from './api.js';
 import { periodeMois, decaler, eur, moisCle, isoDate, categoriesPour, num, arrondi, LIB_ESPACE } from './format.js';
+import ChoixCategorie from './Categorie.jsx';
 
 export default function Fixes() {
   const { profil, membres, estGestionnaire, rafraichir, activites } = useApp();
@@ -79,8 +80,9 @@ function EditFixe({ initial, onClose, profil, membres, estGestionnaire, activite
     const montant = arrondi(num(f.montant));
     if (!f.libelle.trim()) return flash('Donnez un nom à cette charge.', 'erreur');
     if (!(montant > 0)) return flash('Indiquez un montant.', 'erreur');
+    if (!String(f.categorie || '').trim()) return flash('Choisissez ou écrivez un motif.', 'erreur');
     const ligne = {
-      id: f.id, espace: f.espace, sens: f.sens, libelle: f.libelle.trim(), montant, categorie: f.categorie, jour: f.jour ? Number(f.jour) : null,
+      id: f.id, espace: f.espace, sens: f.sens, libelle: f.libelle.trim(), montant, categorie: String(f.categorie).trim(), jour: f.jour ? Number(f.jour) : null,
       proprietaire: f.espace === 'perso' ? (f.proprietaire || profil.id) : null,
       paye_par: f.espace === 'commun' ? f.paye_par : null, partage: f.espace === 'commun' ? f.partage : null,
       activite_id: f.espace === 'pro' ? f.activite_id : null, actif: true,
@@ -107,14 +109,10 @@ function EditFixe({ initial, onClose, profil, membres, estGestionnaire, activite
         <Champ label="Montant habituel (€)"><input inputMode="decimal" value={f.montant} onChange={(e) => maj('montant', e.target.value.replace(/[^0-9,.]/g, ''))} /></Champ>
         <Champ label="Jour du mois"><input type="number" min="1" max="31" value={f.jour ?? ''} onChange={(e) => maj('jour', e.target.value)} /></Champ>
       </div>
-      <Champ label="Catégorie">
-        <select value={f.categorie} onChange={(e) => maj('categorie', e.target.value)}>
-          {categoriesPour(f.espace, f.sens).map((c) => <option key={c}>{c}</option>)}
-        </select>
-      </Champ>
+      <Champ label="Motif"><ChoixCategorie key={f.espace + f.sens} espace={f.espace} sens={f.sens} valeur={f.categorie} onChange={(c) => maj('categorie', c)} /></Champ>
       {f.espace === 'commun' && <>
-        <Champ label="Payé par"><ChoixPersonnes membres={membres} valeur={f.paye_par} onChange={(v) => maj('paye_par', v)} /></Champ>
-        <Champ label="Partagé entre"><ChoixPersonnes membres={membres} valeur={f.partage} multiple onChange={(v) => maj('partage', v)} /></Champ>
+        <Champ groupe label="Payé par"><ChoixPersonnes membres={membres} valeur={f.paye_par} onChange={(v) => maj('paye_par', v)} /></Champ>
+        <Champ groupe label="Partagé entre"><ChoixPersonnes membres={membres} valeur={f.partage} multiple onChange={(v) => maj('partage', v)} /></Champ>
       </>}
       {f.espace === 'pro' && activites.length > 1 && (
         <Champ label="Activité"><select value={f.activite_id || ''} onChange={(e) => maj('activite_id', e.target.value)}>{activites.map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></Champ>

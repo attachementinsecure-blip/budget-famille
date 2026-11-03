@@ -123,12 +123,14 @@ export function Tuile({ label, valeur, ton, sous }) {
 
 export function Pastille({ ton = 'info', children }) { return <span className={`pastille ton-${ton}`}>{children}</span>; }
 
-export function Champ({ label, children, aide }) {
+// groupe : pour des boutons (un <label> autour de boutons déclencherait le premier au toucher)
+export function Champ({ label, children, aide, groupe }) {
+  const Tag = groupe ? 'div' : 'label';
   return (
-    <label className="champ">
+    <Tag className="champ" {...(groupe ? { role: 'group', 'aria-label': label } : {})}>
       <span className="champ-label">{label}</span>
       {children}
       {aide && <span className="champ-aide">{aide}</span>}
-    </label>
+    </Tag>
   );
 }

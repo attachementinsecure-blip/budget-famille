@@ -197,3 +197,30 @@ input:focus, select:focus { border-color: var(--accent); outline: none; }
 .histo-ligne p { margin: 0; }
 .histo-detail { color: var(--accent); font-size: .9rem; margin-top: 2px !important; }
 .histo-ligne small { color: var(--texte2); font-size: .8rem; }
+
+/* ---------- Import du relevé ---------- */
+.colonnes summary { cursor: pointer; font-weight: 600; }
+.colonnes .grille2 { margin-top: 12px; }
+.ligne-import { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.ligne-import.ignoree { opacity: .55; }
+.li-haut { display: flex; gap: 10px; align-items: flex-start; }
+.li-libelle { flex: 1; min-width: 0; font-weight: 600; font-size: .92rem; overflow-wrap: anywhere; }
+.li-choix { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+.li-choix select { min-height: 42px; padding: 6px 10px; font-size: 15px; }
+.li-choix select:nth-child(3) { grid-column: 1 / -1; }
+.li-etat .pastille { font-size: .75rem; }
+.import-pied { position: sticky; bottom: calc(var(--barre-h) + 10px + env(safe-area-inset-bottom)); z-index: 4; }
+@media (min-width: 900px) { .import-pied { bottom: 16px; } }
+.fin-import { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--succes); }
+.fin-import p { margin: 0; color: var(--texte); }
+.mt { margin-top: 10px; }
+.inactif-doux { opacity: .7; }
+.negatif { color: var(--erreur); }
+.neutre { color: var(--texte2); }
+.carte-especes { cursor: pointer; color: var(--texte); }
+.carte-especes svg:first-child { color: var(--accent); }
+.carte-especes svg:last-child { color: var(--texte2); }
+.cat-libre { display: flex; gap: 6px; align-items: center; }
+.cat-libre input { flex: 1; min-width: 0; }
+.cat-libre .lien { padding: 4px 6px; font-size: .85rem; }
+.li-choix .cat-libre input { min-height: 42px; font-size: 15px; }

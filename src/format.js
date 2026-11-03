@@ -39,23 +39,30 @@ export const decaler = (ref, mode, n) => {
 };
 export const dansPeriode = (op, p) => op.date_op >= p.debut && op.date_op <= p.fin;
 
-export const CAT_DEPENSE = ['Alimentation','Logement','Énergie et eau','Transport','Santé','Enfants','École','Loisirs','Vêtements','Maison','Abonnements','Assurances','Impôts','Cadeaux','Autre'];
+export const CAT_DEPENSE = ['Alimentation','Restaurant','Café','Cigarettes','Carburant','Logement','Énergie et eau','Transport','Santé','Enfants','École','Loisirs','Vêtements','Maison','Abonnements','Assurances','Impôts','Cadeaux','Autre'];
 export const CAT_RENTREE = ['Salaire','Allocations','Remboursement','Vente','Autre'];
 export const CAT_PRO_RECETTE = ['Réservation Airbnb','Réservation directe','Paiement Stripe','Autre recette'];
-export const CAT_PRO_DEPENSE = ['Commission plateforme','Ménage','Linge','Entretien et réparations','Fournitures','Énergie et eau','Internet','Assurance','Taxes','Comptable','Autre frais'];
+export const CAT_PRO_DEPENSE = ['Commission plateforme','Ménage','Linge','Entretien et réparations','Fournitures','Énergie et eau','Internet','Assurance','Taxes','Comptable','Carburant','Restaurant','Autre frais'];
 export const TAUX_IVA = [0, 6, 13, 23];
+// IVA désactivée pour l'instant : passer à true pour la réafficher partout
+export const AVEC_IVA = false;
+export const CATEGORIES_DE_BASE = new Set();
 
 export const categoriesPour = (espace, sens) =>
   espace === 'pro' ? (sens === 'rentree' ? CAT_PRO_RECETTE : CAT_PRO_DEPENSE)
                    : (sens === 'rentree' ? CAT_RENTREE : CAT_DEPENSE);
 
 export const LIB_ESPACE = { perso: 'Perso', commun: 'Commun', pro: 'Pro' };
-export const LIB_SENS = { depense: 'Dépense', rentree: 'Rentrée' };
+export const LIB_SENS = { depense: 'Dépense', rentree: 'Rentrée', retrait: 'Retrait' };
+export const MOYENS = [['carte', 'Carte'], ['especes', 'Espèces'], ['virement', 'Virement']];
+export const LIB_MOYEN = Object.fromEntries(MOYENS);
 export const LIB_ROLE = { gestionnaire: 'Gestionnaire', membre: 'Membre' };
 
 export const LIB_CHAMPS = {
   montant: 'Montant', date_op: 'Date', categorie: 'Catégorie', libelle: 'Description', espace: 'Espace',
   sens: 'Type', archive: 'Archivée', paye_par: 'Payé par', partage: 'Partagé entre', iva_taux: 'Taux IVA',
   iva_montant: 'IVA', nif: 'NIF', fournisseur: 'Fournisseur', justificatif: 'Justificatif', prenom: 'Prénom',
-  role: 'Rôle', actif: 'Actif', libelle_fixe: 'Libellé', jour: 'Jour', nom: 'Nom', activite_id: 'Activité',
+  role: 'Rôle', actif: 'Actif', moyen: 'Payé en', libelle_fixe: 'Libellé', jour: 'Jour', nom: 'Nom', activite_id: 'Activité',
 };
+
+for (const l of [CAT_DEPENSE, CAT_RENTREE, CAT_PRO_RECETTE, CAT_PRO_DEPENSE]) for (const c of l) CATEGORIES_DE_BASE.add(c);

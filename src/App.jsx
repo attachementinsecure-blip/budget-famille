@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { User, Users, BarChart3, Briefcase, Repeat, Home, History, Stethoscope, MoreHorizontal, CloudOff, Wallet } from 'lucide-react';
+import { User, Users, BarChart3, Briefcase, Repeat, Home, History, Stethoscope, MoreHorizontal, CloudOff, Wallet, FileUp, Banknote } from 'lucide-react';
 import { supabase, configOk, messageClair, attente, VERSION, local } from './api.js';
 import { AppCtx } from './contexte.jsx';
 import { FlashProvider, Modal, Champ, useFlash } from './ui.jsx';
@@ -12,6 +12,9 @@ import Famille from './Famille.jsx';
 import Historique from './Historique.jsx';
 import Diagnostic from './Diagnostic.jsx';
 import Saisie from './Saisie.jsx';
+import Import from './Import.jsx';
+import Especes from './Especes.jsx';
+import { CATEGORIES_DE_BASE } from './format.js';
 
 const PAGES = {
   moi: { label: 'Moi', icone: User, C: Moi },
@@ -19,6 +22,8 @@ const PAGES = {
   bilan: { label: 'Bilan', icone: BarChart3, C: Bilan },
   pro: { label: 'Pro', icone: Briefcase, C: Pro, gestion: true },
   fixes: { label: 'Fixes', icone: Repeat, C: Fixes },
+  especes: { label: 'Espèces', icone: Banknote, C: Especes },
+  releve: { label: 'Relevé bancaire', icone: FileUp, C: Import },
   famille: { label: 'Famille', icone: Home, C: Famille },
   historique: { label: 'Historique', icone: History, C: Historique },
   diagnostic: { label: 'Diagnostic', icone: Stethoscope, C: Diagnostic },
@@ -127,8 +132,9 @@ function Espace({ session }) {
   const [profil, setProfil] = useState(() => local.get('profil'));
   const [refuse, setRefuse] = useState(false);
   const [tousMembres, setTousMembres] = useState(() => local.get('membres', []));
-  const [activites, setActivites] = useState(() => local.get('activites', []));
+  const [toutesActivites, setToutesActivites] = useState(() => local.get('activites', []));
   const [rev, setRev] = useState(0);
+  const [motifsPerso, setMotifsPerso] = useState(() => local.get('motifs', []));
   const [page, setPage] = useState('moi');
   const [plus, setPlus] = useState(false);
   const [saisie, setSaisie] = useState(null);
@@ -150,7 +156,12 @@ function Espace({ session }) {
   useEffect(() => {
     if (!profil) return;
     supabase.from('profils').select('*').order('cree_le').then(({ data }) => { if (data) { setTousMembres(data); local.set('membres', data); } });
-    if (profil.role === 'gestionnaire') supabase.from('activites').select('*').eq('archive', false).order('cree_le').then(({ data }) => { if (data) { setActivites(data); local.set('activites', data); } });
+    supabase.from('operations').select('categorie').eq('archive', false).order('cree_le', { ascending: false }).limit(3000).then(({ data }) => {
+      if (!data) return;
+      const m = [...new Set(data.map((o) => o.categorie).filter((c) => c && !CATEGORIES_DE_BASE.has(c) && c !== 'Retrait espèces'))].sort((a, b) => a.localeCompare(b, 'fr'));
+      setMotifsPerso(m); local.set('motifs', m);
+    });
+    if (profil.role === 'gestionnaire') supabase.from('activites').select('*').order('cree_le').then(({ data }) => { if (data) { setToutesActivites(data); local.set('activites', data); } });
   }, [profil, rev]);
 
   // Envoi automatique des saisies en attente au retour du réseau
@@ -164,8 +175,10 @@ function Espace({ session }) {
 
   const estGestionnaire = profil?.role === 'gestionnaire';
   const membres = useMemo(() => tousMembres.filter((m) => m.actif), [tousMembres]);
-  const ctx = useMemo(() => ({ session, profil, membres, tousMembres, activites, estGestionnaire, rev, rafraichir }),
-    [session, profil, membres, tousMembres, activites, estGestionnaire, rev, rafraichir]);
+  const activites = useMemo(() => toutesActivites.filter((a) => !a.archive), [toutesActivites]);
+  const aller = useCallback((k) => { setPage(k); setPlus(false); window.scrollTo(0, 0); }, []);
+  const ctx = useMemo(() => ({ session, profil, membres, tousMembres, activites, toutesActivites, estGestionnaire, rev, rafraichir, aller, motifsPerso }),
+    [session, profil, membres, tousMembres, activites, toutesActivites, estGestionnaire, rev, rafraichir, aller, motifsPerso]);
 
   if (refuse) return (
     <Ecran titre="Pas encore invité(e)">
@@ -181,7 +194,6 @@ function Espace({ session }) {
   const autres = visibles.filter((k) => !barre.includes(k));
   const pageSure = visibles.includes(page) ? page : 'moi';
   const Page = PAGES[pageSure].C;
-  const aller = (k) => { setPage(k); setPlus(false); window.scrollTo(0, 0); };
 
   return (
     <AppCtx.Provider value={ctx}>

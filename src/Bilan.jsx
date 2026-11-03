@@ -119,7 +119,7 @@ export default function Bilan() {
         <h3 className="titre-section">Activité pro</h3>
         <div className="tuiles">
           <Tuile label="Recettes" valeur={eur(pro.recettes)} ton="succes" sous={proAvant.recettes ? `${evolution(pro.recettes, proAvant.recettes)} % vs avant` : null} />
-          <Tuile label="Résultat HT" valeur={eur(pro.resultatHT)} ton={pro.resultatHT >= 0 ? 'succes' : 'erreur'} />
+          <Tuile label="Résultat" valeur={eur(pro.resultatHT)} ton={pro.resultatHT >= 0 ? 'succes' : 'erreur'} />
         </div>
       </>}
     </div>

@@ -108,3 +108,15 @@ export function evolution(v, avant) {
   if (!avant) return null;
   return Math.round((v / avant - 1) * 100);
 }
+
+// Espèces : qui a l'argent liquide en main
+export const porteur = (o) => (o.espace === 'commun' ? o.paye_par : o.proprietaire || o.cree_par);
+export function mouvementEspeces(o) {
+  if (o.archive) return 0;
+  if (o.sens === 'retrait') return Number(o.montant);
+  if (o.moyen !== 'especes') return 0;
+  return o.sens === 'rentree' ? Number(o.montant) : -Number(o.montant);
+}
+export function soldeEspeces(ops, uid) {
+  return arrondi(ops.filter((o) => porteur(o) === uid).reduce((s, o) => s + mouvementEspeces(o), 0));
+}

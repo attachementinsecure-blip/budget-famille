@@ -1,4 +1,4 @@
-import { Paperclip, CloudOff, Repeat } from 'lucide-react';
+import { Paperclip, CloudOff, Repeat, Banknote } from 'lucide-react';
 import { eur, dateCourte } from './format.js';
 import { useApp } from './contexte.jsx';
 import { Vide } from './ui.jsx';
@@ -21,12 +21,13 @@ export default function ListeOps({ ops, onOuvrir, vide, montrerPayeur }) {
               </small>
             </span>
             <span className="ligne-icones">
+              {(o.moyen === 'especes' || o.sens === 'retrait') && <Banknote size={14} aria-label="Espèces" />}
               {o.fixe_id && <Repeat size={14} aria-label="Charge fixe" />}
               {o.justificatif && <Paperclip size={14} aria-label="Justificatif" />}
               {o._attente && <CloudOff size={14} aria-label="En attente d'envoi" />}
             </span>
-            <span className={`ligne-montant ${o.sens === 'rentree' ? 'positif' : ''}`}>
-              {o.sens === 'rentree' ? '+' : '−'}{eur(o.montant)}
+            <span className={`ligne-montant ${o.sens === 'rentree' ? 'positif' : o.sens === 'retrait' ? 'neutre' : ''}`}>
+              {o.sens === 'rentree' ? '+' : o.sens === 'retrait' ? '' : '−'}{eur(o.montant)}
             </span>
           </button>
         </li>

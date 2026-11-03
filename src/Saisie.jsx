@@ -3,7 +3,8 @@ import { Paperclip, Eye, Archive } from 'lucide-react';
 import { Modal, Confirmer, SaveBadge, Tabs, ChoixPersonnes, Champ, useFlash } from './ui.jsx';
 import { useApp } from './contexte.jsx';
 import { supabase, enregistrer, envoyerJustificatif, lienJustificatif, local, messageClair, nouvelId } from './api.js';
-import { aujourdhui, categoriesPour, num, arrondi, TAUX_IVA, LIB_ESPACE } from './format.js';
+import { aujourdhui, categoriesPour, num, arrondi, TAUX_IVA, LIB_ESPACE, AVEC_IVA, MOYENS } from './format.js';
+import ChoixCategorie from './Categorie.jsx';
 import { ivaDepuisTTC } from './calculs.js';
 
 const vierge = (espace, sens, profil, membres, activites) => ({
@@ -12,14 +13,16 @@ const vierge = (espace, sens, profil, membres, activites) => ({
   paye_par: espace === 'commun' ? profil.id : null,
   partage: espace === 'commun' ? membres.map((m) => m.id) : null,
   activite_id: espace === 'pro' ? activites[0]?.id || null : null,
-  iva_taux: espace === 'pro' ? (sens === 'rentree' ? 6 : 23) : null, iva_montant: null, nif: '', fournisseur: '', justificatif: null,
+  iva_taux: espace === 'pro' && AVEC_IVA ? (sens === 'rentree' ? 6 : 23) : null, iva_montant: null, nif: '', fournisseur: '', justificatif: null,
+  moyen: sens === 'retrait' ? 'especes' : 'carte',
 });
 
 export default function Saisie({ initial, onClose }) {
   const { profil, membres, activites, rafraichir, estGestionnaire } = useApp();
   const flash = useFlash();
   const existant = Boolean(initial.cree_le);
-  const cleBrouillon = `brouillon:${initial.espace}`;
+  const cleBrouillon = `brouillon:${initial.espace}:${initial.sens || 'depense'}`;
+  const estRetrait = initial.sens === 'retrait';
   const [f, setF] = useState(() => {
     if (existant) return { ...initial, montant: String(initial.montant).replace('.', ',') };
     const b = local.get(cleBrouillon);
@@ -50,28 +53,31 @@ export default function Saisie({ initial, onClose }) {
   const ivaAffichee = ivaManuelle ? f.iva_montant ?? '' : ivaAuto;
 
   function changerSens(sens) {
-    setF((x) => ({ ...x, sens, categorie: categoriesPour(x.espace, sens)[0], iva_taux: x.espace === 'pro' ? (sens === 'rentree' ? 6 : 23) : null }));
+    setF((x) => ({ ...x, sens, categorie: categoriesPour(x.espace, sens)[0], iva_taux: x.espace === 'pro' && AVEC_IVA ? (sens === 'rentree' ? 6 : 23) : null }));
   }
   function changerEspace(espace) {
-    setF((x) => ({ ...vierge(espace, x.sens, profil, membres, activites), id: x.id, montant: x.montant, date_op: x.date_op, libelle: x.libelle }));
+    setF((x) => ({ ...vierge(espace, x.sens, profil, membres, activites), id: x.id, montant: x.montant, date_op: x.date_op, libelle: x.libelle, moyen: x.moyen }));
   }
 
   async function valider() {
     const montant = arrondi(num(f.montant));
     if (!(montant > 0)) return flash('Indiquez un montant.', 'erreur');
     if (f.espace === 'commun' && (!f.partage || !f.partage.length)) return flash('Choisissez avec qui la dépense est partagée.', 'erreur');
+    if (!estRetrait && !String(f.categorie || '').trim()) return flash('Choisissez ou écrivez un motif.', 'erreur');
     setEnvoi(true); setEtat('encours');
     try {
       let justificatif = f.justificatif;
       if (fichier) justificatif = await envoyerJustificatif(fichier, f.espace, f.espace === 'perso' ? f.proprietaire : profil.id);
       const ligne = {
-        id: f.id, espace: f.espace, sens: f.sens, montant, date_op: f.date_op, categorie: f.categorie, libelle: f.libelle.trim(),
+        id: f.id, espace: estRetrait ? 'perso' : f.espace, sens: f.sens, montant, date_op: f.date_op,
+        categorie: estRetrait ? 'Retrait espèces' : String(f.categorie).trim(), libelle: (f.libelle || '').trim() || (estRetrait ? 'Retrait distributeur' : ''),
+        moyen: estRetrait ? 'especes' : (f.moyen || null),
         proprietaire: f.espace === 'perso' ? f.proprietaire : (f.espace === 'commun' ? null : profil.id),
         paye_par: f.espace === 'commun' ? f.paye_par : null,
         partage: f.espace === 'commun' ? f.partage : null,
         activite_id: f.espace === 'pro' ? f.activite_id : null,
-        iva_taux: f.espace === 'pro' ? Number(f.iva_taux) : null,
-        iva_montant: f.espace === 'pro' ? arrondi(num(ivaAffichee)) : null,
+        iva_taux: f.espace === 'pro' && AVEC_IVA ? Number(f.iva_taux) : null,
+        iva_montant: f.espace === 'pro' && AVEC_IVA ? arrondi(num(ivaAffichee)) : null,
         nif: f.espace === 'pro' ? (f.nif || '').trim() || null : null,
         fournisseur: f.espace === 'pro' ? (f.fournisseur || '').trim() || null : null,
         justificatif, fixe_id: f.fixe_id || null, mois_fixe: f.mois_fixe || null,
@@ -100,7 +106,7 @@ export default function Saisie({ initial, onClose }) {
 
   async function voir() { try { window.open(await lienJustificatif(f.justificatif), '_blank'); } catch (e) { flash(messageClair(e), 'erreur'); } }
 
-  const titre = existant ? 'Modifier' : (f.sens === 'rentree' ? 'Nouvelle rentrée' : 'Nouvelle dépense');
+  const titre = estRetrait ? (existant ? 'Modifier le retrait' : 'Retrait au distributeur') : existant ? 'Modifier' : (f.sens === 'rentree' ? 'Nouvelle rentrée' : 'Nouvelle dépense');
   return (
     <Modal titre={titre} onClose={onClose} pied={<>
       {existant && <button className="btn btn-second" onClick={() => setConfirm(true)}><Archive size={18} /> Archiver</button>}
@@ -111,10 +117,10 @@ export default function Saisie({ initial, onClose }) {
         {!existant && etat === 'brouillon' && <button className="lien" onClick={effacerBrouillon}>Tout effacer</button>}
       </div>
 
-      {!existant && espacesPermis.length > 1 && (
+      {!existant && !estRetrait && espacesPermis.length > 1 && (
         <Tabs valeur={f.espace} onChange={changerEspace} options={espacesPermis.map((e) => [e, LIB_ESPACE[e]])} />
       )}
-      <Tabs valeur={f.sens} onChange={changerSens} options={[['depense', f.espace === 'pro' ? 'Frais' : 'Dépense'], ['rentree', f.espace === 'pro' ? 'Recette' : 'Rentrée']]} />
+      {!estRetrait && <Tabs valeur={f.sens} onChange={changerSens} options={[['depense', f.espace === 'pro' ? 'Frais' : 'Dépense'], ['rentree', f.espace === 'pro' ? 'Recette' : 'Rentrée']]} />}
 
       <Champ label="Montant (€)">
         <input className="input-montant" inputMode="decimal" placeholder="0,00" value={f.montant} autoFocus={!existant}
@@ -122,18 +128,21 @@ export default function Saisie({ initial, onClose }) {
       </Champ>
       <div className="grille2">
         <Champ label="Date"><input type="date" value={f.date_op} onChange={(e) => maj('date_op', e.target.value)} /></Champ>
-        <Champ label="Catégorie">
-          <select value={f.categorie} onChange={(e) => { const c = e.target.value; setF((x) => ({ ...x, categorie: c, ...(c === 'Commission plateforme' ? { iva_taux: 0 } : {}) })); setIvaManuelle(false); }}>
-            {cats.includes(f.categorie) ? null : <option>{f.categorie}</option>}
-            {cats.map((c) => <option key={c}>{c}</option>)}
-          </select>
-        </Champ>
+        {!estRetrait && <Champ label="Motif">
+          <ChoixCategorie espace={f.espace} sens={f.sens} valeur={f.categorie}
+            onChange={(c) => { setF((x) => ({ ...x, categorie: c, ...(c === 'Commission plateforme' ? { iva_taux: 0 } : {}) })); setIvaManuelle(false); }} />
+        </Champ>}
       </div>
-      <Champ label="Description"><input value={f.libelle} placeholder="Ex. : courses Continente" onChange={(e) => maj('libelle', e.target.value)} /></Champ>
+      <Champ label="Description"><input value={f.libelle} placeholder={estRetrait ? 'Ex. : distributeur Continente' : 'Ex. : courses Continente'} onChange={(e) => maj('libelle', e.target.value)} /></Champ>
+      {!estRetrait && <Champ groupe label={f.sens === 'rentree' ? 'Reçu en' : 'Payé en'}>
+        <div className="choixpers">
+          {MOYENS.map(([k, l]) => <button type="button" key={k} className={f.moyen === k ? 'actif' : ''} aria-pressed={f.moyen === k} onClick={() => maj('moyen', k)}>{l}</button>)}
+        </div>
+      </Champ>}
 
       {f.espace === 'commun' && <>
-        <Champ label="Payé par"><ChoixPersonnes membres={membres} valeur={f.paye_par} onChange={(v) => maj('paye_par', v)} /></Champ>
-        <Champ label="Partagé entre" aide={f.partage?.length ? `${f.partage.length} personne(s), parts égales` : null}>
+        <Champ groupe label="Payé par"><ChoixPersonnes membres={membres} valeur={f.paye_par} onChange={(v) => maj('paye_par', v)} /></Champ>
+        <Champ groupe label="Partagé entre" aide={f.partage?.length ? `${f.partage.length} personne(s), parts égales` : null}>
           <ChoixPersonnes membres={membres} valeur={f.partage} multiple onChange={(v) => maj('partage', v)} />
         </Champ>
       </>}
@@ -146,7 +155,7 @@ export default function Saisie({ initial, onClose }) {
             </select>
           </Champ>
         )}
-        <div className="grille2">
+        {AVEC_IVA && <div className="grille2">
           <Champ label="Taux IVA">
             <select value={f.iva_taux ?? 0} onChange={(e) => { setIvaManuelle(false); maj('iva_taux', Number(e.target.value)); }}>
               {TAUX_IVA.map((t) => <option key={t} value={t}>{t} %</option>)}
@@ -156,14 +165,11 @@ export default function Saisie({ initial, onClose }) {
             <input inputMode="decimal" value={String(ivaAffichee).replace('.', ',')}
               onChange={(e) => { setIvaManuelle(true); maj('iva_montant', e.target.value.replace(/[^0-9,.]/g, '')); }} />
           </Champ>
-        </div>
-        <div className="grille2">
-          <Champ label={f.sens === 'rentree' ? 'Client ou plateforme' : 'Fournisseur'}><input value={f.fournisseur || ''} onChange={(e) => maj('fournisseur', e.target.value)} /></Champ>
-          <Champ label="NIF"><input inputMode="numeric" value={f.nif || ''} onChange={(e) => maj('nif', e.target.value.replace(/[^0-9A-Za-z]/g, ''))} /></Champ>
-        </div>
+        </div>}
+        <Champ label={f.sens === 'rentree' ? 'Client ou plateforme' : 'Fournisseur'}><input value={f.fournisseur || ''} onChange={(e) => maj('fournisseur', e.target.value)} /></Champ>
       </>}
 
-      <Champ label="Justificatif (photo ou PDF)" aide={f.espace === 'pro' ? 'À garder pour la comptabilité.' : null}>
+      {!estRetrait && <Champ groupe label="Justificatif (photo ou PDF)" aide={f.espace === 'pro' ? 'À garder pour la comptabilité.' : null}>
         <div className="justif">
           <label className="btn btn-second">
             <Paperclip size={18} /> {fichier ? fichier.name.slice(0, 24) : (f.justificatif ? 'Remplacer' : 'Ajouter')}
@@ -171,7 +177,7 @@ export default function Saisie({ initial, onClose }) {
           </label>
           {f.justificatif && !fichier && <button type="button" className="btn btn-second" onClick={voir}><Eye size={18} /> Voir</button>}
         </div>
-      </Champ>
+      </Champ>}
 
       {confirm && <Confirmer texte="Archiver cette opération ? Elle ne comptera plus dans les totaux, mais reste dans l'historique." action="Archiver" danger onOui={archiver} onNon={() => setConfirm(false)} />}
     </Modal>
