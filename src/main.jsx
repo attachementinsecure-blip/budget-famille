@@ -9,6 +9,14 @@ createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMo
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
-// Retrait d'un éventuel badge Netlify
-const retirerBadge = () => document.querySelectorAll('[data-netlify-deploy-id], #netlify-badge, .netlify-badge').forEach((e) => e.remove());
-setTimeout(retirerBadge, 1500);
+
+// Retrait du badge « Powered by Netlify » : tout ce qui est ajouté hors de l'application
+const GARDES = new Set(['SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT', 'TEMPLATE']);
+function retirerBadge() {
+  for (const el of [...document.body.children]) {
+    if (el.id === 'root' || GARDES.has(el.tagName)) continue;
+    el.remove();
+  }
+}
+retirerBadge();
+new MutationObserver(retirerBadge).observe(document.body, { childList: true });
