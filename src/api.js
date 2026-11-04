@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-export const VERSION = '1.2.0';
-export const VERSION_BASE_ATTENDUE = '1.2.0';
+export const VERSION = '2.0.0';
+export const VERSION_BASE_ATTENDUE = '2.0.0';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -19,7 +19,8 @@ export function messageClair(err) {
   if (/row-level security|permission denied|violates row-level/i.test(m)) return 'Vous n\'avez pas le droit de faire cette action.';
   if (/rate limit/i.test(m)) return 'Trop d\'essais. Attendez quelques minutes.';
   if (/JWT|session/i.test(m)) return 'Votre session a expiré. Reconnectez-vous.';
-  if (/6 membres|gestionnaire|fait déjà partie/i.test(m)) return m;
+  if (err?.code === 'P0001' || /6 membres|gestionnaire|fait déjà partie/i.test(m)) return m;
+  if (/duplicate key/i.test(m)) return 'Cet élément existe déjà.';
   if (/does not exist|schema cache/i.test(m)) return 'La base n\'est pas à jour. Ouvrez l\'écran Diagnostic.';
   return 'Une erreur est survenue. Réessayez dans un instant.';
 }

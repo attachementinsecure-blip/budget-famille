@@ -6,7 +6,8 @@ import { supabase, messageClair } from './api.js';
 import { LIB_ROLE } from './format.js';
 
 export default function Famille() {
-  const { profil, membres, tousMembres, estGestionnaire, rafraichir, activites, toutesActivites } = useApp();
+  const { profil, membres, tousMembres, estGestionnaire, rafraichir, activites, toutesActivites, famille } = useApp();
+  const [nomFamille, setNomFamille] = useState(famille?.nom || '');
   const archivees = toutesActivites.filter((a) => a.archive);
   const [editAct, setEditAct] = useState(null);
   const flash = useFlash();
@@ -45,7 +46,19 @@ export default function Famille() {
 
   return (
     <div className="page">
-      <h2 className="titre-page">Famille</h2>
+      <h2 className="titre-page">{famille?.nom || 'Famille'}</h2>
+      {estGestionnaire && famille && (
+        <div className="carte">
+          <Champ label="Nom de la famille">
+            <div className="ligne-champ">
+              <input value={nomFamille} onChange={(e) => setNomFamille(e.target.value)} />
+              <button className="btn btn-second" disabled={!nomFamille.trim() || nomFamille === famille.nom}
+                onClick={() => action(supabase.from('familles').update({ nom: nomFamille.trim() }).eq('id', famille.id), 'Nom de la famille enregistré.')}>Enregistrer</button>
+            </div>
+          </Champ>
+          <p className="texte-doux petit">Les autres familles ne voient jamais vos données, sauf les projets que vous partagez.</p>
+        </div>
+      )}
 
       <div className="carte">
         <Champ label="Mon prénom">

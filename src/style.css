@@ -224,3 +224,15 @@ input:focus, select:focus { border-color: var(--accent); outline: none; }
 .cat-libre input { flex: 1; min-width: 0; }
 .cat-libre .lien { padding: 4px 6px; font-size: .85rem; }
 .li-choix .cat-libre input { min-height: 42px; font-size: 15px; }
+.retour { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; padding: 6px 0; }
+.icone-accent { color: var(--accent); flex-shrink: 0; }
+.ligne-solde { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.ligne-solde small { font-size: .76rem; white-space: nowrap; }
+.fiche-tete strong { display: inline-flex; align-items: center; gap: 6px; }
+.parts { display: flex; flex-direction: column; gap: 10px; }
+.parts-pied { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 600; }
+.case { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .92rem; color: var(--texte2); }
+.case input { width: 22px; min-height: 22px; height: 22px; accent-color: var(--accent); }
+.case .lien { padding: 0; }
+.texte-legal p { margin: 0 0 10px; }
+.titre-page svg { vertical-align: -3px; color: var(--accent); }

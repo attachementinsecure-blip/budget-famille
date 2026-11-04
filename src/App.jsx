@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { User, Users, BarChart3, Briefcase, Repeat, Home, History, Stethoscope, MoreHorizontal, CloudOff, Wallet, FileUp, Banknote } from 'lucide-react';
+import { User, Users, BarChart3, Briefcase, Repeat, Home, History, Stethoscope, MoreHorizontal, CloudOff, Wallet, FileUp, Banknote, FolderKanban, Shield } from 'lucide-react';
 import { supabase, configOk, messageClair, attente, VERSION, local } from './api.js';
 import { AppCtx } from './contexte.jsx';
 import { FlashProvider, Modal, Champ, useFlash } from './ui.jsx';
@@ -14,6 +14,8 @@ import Diagnostic from './Diagnostic.jsx';
 import Saisie from './Saisie.jsx';
 import Import from './Import.jsx';
 import Especes from './Especes.jsx';
+import Projets from './Projets.jsx';
+import Confidentialite, { TexteConfidentialite } from './Confidentialite.jsx';
 import { CATEGORIES_DE_BASE } from './format.js';
 
 const PAGES = {
@@ -24,9 +26,11 @@ const PAGES = {
   fixes: { label: 'Fixes', icone: Repeat, C: Fixes },
   especes: { label: 'Espèces', icone: Banknote, C: Especes },
   releve: { label: 'Relevé bancaire', icone: FileUp, C: Import },
+  projets: { label: 'Projets partagés', icone: FolderKanban, C: Projets },
   famille: { label: 'Famille', icone: Home, C: Famille },
   historique: { label: 'Historique', icone: History, C: Historique },
   diagnostic: { label: 'Diagnostic', icone: Stethoscope, C: Diagnostic },
+  confidentialite: { label: 'Confidentialité', icone: Shield, C: Confidentialite },
 };
 
 export default function App() {
@@ -135,6 +139,7 @@ function Espace({ session }) {
   const [toutesActivites, setToutesActivites] = useState(() => local.get('activites', []));
   const [rev, setRev] = useState(0);
   const [motifsPerso, setMotifsPerso] = useState(() => local.get('motifs', []));
+  const [famille, setFamille] = useState(() => local.get('famille'));
   const [page, setPage] = useState('moi');
   const [plus, setPlus] = useState(false);
   const [saisie, setSaisie] = useState(null);
@@ -149,12 +154,14 @@ function Espace({ session }) {
       if (!data || !data.id) { setRefuse(true); setProfil(null); local.del('profil'); return; }
       if (!data.actif) { setRefuse(true); return; }
       setRefuse(false); setProfil(data); local.set('profil', data);
+      supabase.rpc('rattacher_projets').then(() => {});
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.user.id, rev]);
 
   useEffect(() => {
     if (!profil) return;
+    supabase.from('familles').select('*').maybeSingle().then(({ data }) => { if (data) { setFamille(data); local.set('famille', data); } });
     supabase.from('profils').select('*').order('cree_le').then(({ data }) => { if (data) { setTousMembres(data); local.set('membres', data); } });
     supabase.from('operations').select('categorie').eq('archive', false).order('cree_le', { ascending: false }).limit(3000).then(({ data }) => {
       if (!data) return;
@@ -177,16 +184,10 @@ function Espace({ session }) {
   const membres = useMemo(() => tousMembres.filter((m) => m.actif), [tousMembres]);
   const activites = useMemo(() => toutesActivites.filter((a) => !a.archive), [toutesActivites]);
   const aller = useCallback((k) => { setPage(k); setPlus(false); window.scrollTo(0, 0); }, []);
-  const ctx = useMemo(() => ({ session, profil, membres, tousMembres, activites, toutesActivites, estGestionnaire, rev, rafraichir, aller, motifsPerso }),
-    [session, profil, membres, tousMembres, activites, toutesActivites, estGestionnaire, rev, rafraichir, aller, motifsPerso]);
+  const ctx = useMemo(() => ({ session, profil, membres, tousMembres, activites, toutesActivites, estGestionnaire, rev, rafraichir, aller, motifsPerso, famille }),
+    [session, profil, membres, tousMembres, activites, toutesActivites, estGestionnaire, rev, rafraichir, aller, motifsPerso, famille]);
 
-  if (refuse) return (
-    <Ecran titre="Pas encore invité(e)">
-      <p className="texte-doux">Le compte <strong>{session.user.email}</strong> ne fait pas encore partie de la famille. Demandez à un gestionnaire de vous inviter avec cette adresse dans l'écran Famille, puis touchez « Réessayer ».</p>
-      <button className="btn btn-primaire btn-grand" onClick={rafraichir}>Réessayer</button>
-      <button className="lien" onClick={() => supabase.auth.signOut()}>Changer de compte</button>
-    </Ecran>
-  );
+  if (refuse) return <CreerFamille email={session.user.email} reessayer={rafraichir} />;
   if (!profil) return <Ecran titre="Budget Famille"><p className="texte-doux">Chargement…</p></Ecran>;
 
   const visibles = Object.entries(PAGES).filter(([, p]) => !p.gestion || estGestionnaire).map(([k]) => k);
@@ -201,7 +202,7 @@ function Espace({ session }) {
         <aside className="menu-cote">
           <div className="menu-marque"><Wallet size={22} /> Budget Famille</div>
           <nav>{visibles.map((k) => { const I = PAGES[k].icone; return <button key={k} className={pageSure === k ? 'actif' : ''} onClick={() => aller(k)}><I size={20} /> {PAGES[k].label}</button>; })}</nav>
-          <div className="menu-pied">{profil.prenom}<br /><span>Version {VERSION}</span></div>
+          <div className="menu-pied">{profil.prenom}{famille ? `, ${famille.nom}` : ''}<br /><span>Version {VERSION}</span></div>
         </aside>
 
         <main className="contenu">
@@ -233,5 +234,39 @@ function Espace({ session }) {
         {saisie && <Saisie initial={saisie} onClose={() => setSaisie(null)} />}
       </div>
     </AppCtx.Provider>
+  );
+}
+
+function CreerFamille({ email, reessayer }) {
+  const flash = useFlash();
+  const [nom, setNom] = useState('');
+  const [prenom, setPrenom] = useState('');
+  const [accord, setAccord] = useState(false);
+  const [voir, setVoir] = useState(false);
+  const [envoi, setEnvoi] = useState(false);
+  async function creer() {
+    if (!nom.trim()) return flash('Donnez un nom à votre famille.', 'erreur');
+    if (!accord) return flash('Cochez la case de confidentialité pour continuer.', 'erreur');
+    setEnvoi(true);
+    const { error } = await supabase.rpc('creer_famille', { p_nom: nom.trim(), p_prenom: prenom.trim() });
+    setEnvoi(false);
+    if (error) return flash(messageClair(error), 'erreur');
+    reessayer();
+  }
+  return (
+    <Ecran titre="Bienvenue !">
+      <p className="texte-doux">Le compte <strong>{email}</strong> n'est encore dans aucune famille.</p>
+      <div className="carte form-connexion">
+        <h2 className="titre-section">Créer ma famille</h2>
+        <Champ label="Nom de la famille"><input value={nom} placeholder="Ex. : Famille Silva" onChange={(e) => setNom(e.target.value)} /></Champ>
+        <Champ label="Mon prénom"><input value={prenom} onChange={(e) => setPrenom(e.target.value)} /></Champ>
+        <label className="case"><input type="checkbox" checked={accord} onChange={(e) => setAccord(e.target.checked)} /> J'ai lu comment mes données sont gardées. <button type="button" className="lien" onClick={() => setVoir(true)}>Lire</button></label>
+        <button className="btn btn-primaire btn-plein btn-grand" disabled={envoi} onClick={creer}>{envoi ? 'Un instant…' : 'Créer ma famille'}</button>
+      </div>
+      <p className="texte-doux petit">Quelqu'un doit vous ajouter à sa famille ? Demandez-lui de vous inviter avec cette adresse, puis touchez « Réessayer ».</p>
+      <button className="btn btn-second" onClick={reessayer}>Réessayer</button>
+      <button className="lien" onClick={() => supabase.auth.signOut()}>Changer de compte</button>
+      {voir && <Modal titre="Confidentialité" onClose={() => setVoir(false)}><TexteConfidentialite /></Modal>}
+    </Ecran>
   );
 }

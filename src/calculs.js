@@ -120,3 +120,42 @@ export function mouvementEspeces(o) {
 export function soldeEspeces(ops, uid) {
   return arrondi(ops.filter((o) => porteur(o) === uid).reduce((s, o) => s + mouvementEspeces(o), 0));
 }
+
+// Projets partagés : qui a payé, qui a reçu, qui doit combien à qui
+export function quotesProjet(participants) {
+  const q = participants.map((p) => (p.quote === null || p.quote === undefined ? null : Number(p.quote)));
+  const perso = q.every((x) => x !== null) && Math.abs(q.reduce((s, x) => s + x, 0) - 100) < 0.01;
+  return Object.fromEntries(participants.map((p, i) => [p.id, perso ? q[i] / 100 : 1 / participants.length]));
+}
+export function bilanProjet(ops, participants) {
+  const o = ops.filter((x) => !x.archive);
+  const quotes = quotesProjet(participants);
+  const par = Object.fromEntries(participants.map((p) => [p.id, { paye: 0, recu: 0, quote: quotes[p.id] }]));
+  let depenses = 0, recettes = 0;
+  for (const x of o) {
+    if (x.sens === 'depense') depenses += Number(x.montant); else recettes += Number(x.montant);
+    for (const pt of x.parts || []) {
+      if (!par[pt.participant_id]) continue;
+      if (x.sens === 'depense') par[pt.participant_id].paye += Number(pt.montant); else par[pt.participant_id].recu += Number(pt.montant);
+    }
+  }
+  const resultat = arrondi(recettes - depenses);
+  const net = {};
+  for (const [id, v] of Object.entries(par)) {
+    v.paye = arrondi(v.paye); v.recu = arrondi(v.recu);
+    v.part = arrondi(resultat * v.quote);          // ce qui lui revient du résultat
+    v.solde = arrondi(v.part - (v.recu - v.paye)); // > 0 : on lui doit de l'argent
+    net[id] = v.solde;
+  }
+  const deb = [], cred = [];
+  for (const [id, v] of Object.entries(net)) { if (v < -0.004) deb.push({ id, v: -v }); else if (v > 0.004) cred.push({ id, v }); }
+  deb.sort((a, b) => b.v - a.v); cred.sort((a, b) => b.v - a.v);
+  const virements = []; let i = 0, j = 0;
+  while (i < deb.length && j < cred.length) {
+    const m = arrondi(Math.min(deb[i].v, cred[j].v));
+    if (m > 0) virements.push({ de: deb[i].id, a: cred[j].id, montant: m });
+    deb[i].v = arrondi(deb[i].v - m); cred[j].v = arrondi(cred[j].v - m);
+    if (deb[i].v <= 0.004) i++; if (cred[j].v <= 0.004) j++;
+  }
+  return { depenses: arrondi(depenses), recettes: arrondi(recettes), resultat, par, virements, nb: o.length };
+}

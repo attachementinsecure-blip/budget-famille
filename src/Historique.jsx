@@ -4,7 +4,7 @@ import { supabase, messageClair } from './api.js';
 import { Vide } from './ui.jsx';
 import { dateHeure, eur, LIB_CHAMPS, LIB_ESPACE, LIB_ROLE } from './format.js';
 
-const QUOI = { operations: 'opération', fixes: 'charge fixe', profils: 'membre', activites: 'activité' };
+const QUOI = { operations: 'opération', fixes: 'charge fixe', profils: 'membre', activites: 'activité', projets: 'projet', projet_participants: 'participant', projet_operations: 'opération de projet' };
 const IGNORES = new Set(['id', 'cree_le', 'modifie_le', 'cree_par', 'mois_fixe', 'fixe_id', 'proprietaire']);
 
 function valeurLisible(k, v, nom) {
