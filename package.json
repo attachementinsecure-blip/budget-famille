@@ -1,7 +1,7 @@
 {
   "name": "budget-famille",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,7 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "recharts": "2.12.7",
-    "xlsx": "0.18.5"
+    "xlsx-js-style": "1.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "4.3.4",

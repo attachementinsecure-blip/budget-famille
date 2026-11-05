@@ -1,4 +1,4 @@
-# Budget Famille — V2.1.0
+# Budget Famille — V2.2.0
 
 Application web installable (PWA) : plusieurs familles séparées (6 personnes maximum chacune), dépenses perso, communes et pro, espèces, relevés bancaires, projets partagés entre familles ou personnes.
 Même modèle que FORÇA+ : React + Vite, Supabase, Netlify, tout le code dans `src/` sans sous-dossiers.
