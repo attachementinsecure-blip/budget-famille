@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { Plus, ArrowDownCircle, Download, Copy, FileUp } from 'lucide-react';
+import { Plus, ArrowDownCircle, FileSpreadsheet, Copy, FileUp } from 'lucide-react';
 import { useApp, useOperations } from './contexte.jsx';
 import { NavPeriode, Tuile, useFlash } from './ui.jsx';
 import ListeOps from './ListeOps.jsx';
 import { periodeMois, decaler, eur, AVEC_IVA } from './format.js';
 import { bilanPro } from './calculs.js';
 
-const csvCellule = (v) => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-const nombreCsv = (n) => (Number(n) || 0).toFixed(2).replace('.', ',');
 
 export default function Pro({ ouvrir }) {
   const { activites, toutesActivites, membres, aller } = useApp();
@@ -19,23 +17,6 @@ export default function Pro({ ouvrir }) {
   const b = bilanPro(ops, p, act || null);
   const nomAct = (id) => toutesActivites.find((a) => a.id === id)?.nom || '';
 
-  function exporter() {
-    const tete = AVEC_IVA
-      ? ['Date', 'Activité', 'Type', 'Motif', 'Description', 'Client/Fournisseur', 'NIF', 'TTC', 'Taux IVA', 'IVA', 'HT', 'Payé en', 'Justificatif']
-      : ['Date', 'Activité', 'Type', 'Motif', 'Description', 'Client/Fournisseur', 'Montant', 'Payé en', 'Justificatif'];
-    const lignes = [...b.ops].sort((x, y) => x.date_op.localeCompare(y.date_op)).map((o) => [
-      o.date_op, nomAct(o.activite_id), o.sens === 'rentree' ? 'Recette' : 'Frais', o.categorie, o.libelle, o.fournisseur,
-      ...(AVEC_IVA ? [o.nif, nombreCsv(o.montant), o.iva_taux ?? '', nombreCsv(o.iva_montant), nombreCsv(o.montant - (o.iva_montant || 0))] : [nombreCsv(o.montant)]),
-      o.moyen === 'especes' ? 'Espèces' : o.moyen === 'virement' ? 'Virement' : o.moyen === 'carte' ? 'Carte' : '', o.justificatif ? 'oui' : 'NON',
-    ]);
-    const csv = '\uFEFF' + [tete, ...lignes].map((l) => l.map(csvCellule).join(';')).join('\r\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `pro-${p.debut.slice(0, 7)}.csv`; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    flash('Fichier téléchargé.');
-  }
-
   async function copierCompteRendu() {
     const t = [
       `Compte rendu pro — ${p.label}${act ? ' — ' + nomAct(act) : ''}`,
@@ -44,6 +25,11 @@ export default function Pro({ ouvrir }) {
       `Commissions des plateformes : ${eur(b.commissions)}`,
       `Autres frais : ${eur(b.frais)}`,
       ...(AVEC_IVA ? [`IVA collectée : ${eur(b.ivaCollectee)}`, `IVA déductible : ${eur(b.ivaDeductible)}`, `IVA à reverser : ${eur(b.ivaAPayer)}`, `Résultat hors IVA : ${eur(b.resultatHT)}`] : [`Résultat : ${eur(b.resultatHT)}`]),
+      '',
+      `Net reçu des réservations : ${eur(b.netRecu)}`,
+      '',
+      `Réservations (${b.reservations.length}) :`,
+      ...b.reservations.map((x) => `  - ${x.date_op} ${x.voyageur || 'voyageur ?'}${x.ref_resa ? ' (' + x.ref_resa + ')' : ''} : total ${eur(x.brut)}, frais ${eur(x.fraisP)}, net ${eur(x.net)}`),
       '',
       `${b.ops.length} opération(s), dont ${b.sansJustif.length} sans justificatif.`,
       ...b.sansJustif.map((o) => `  - ${o.date_op} ${o.libelle || o.categorie} ${eur(o.montant)}`),
@@ -77,7 +63,7 @@ export default function Pro({ ouvrir }) {
 
       <div className="tuiles">
         <Tuile label="Recettes" valeur={eur(b.recettes)} ton="succes" />
-        <Tuile label="Commissions" valeur={eur(b.commissions)} ton="encours" />
+        <Tuile label="Frais plateformes" valeur={eur(b.commissions)} ton="encours" sous={b.reservations.length ? `${b.reservations.length} réservation(s), ${eur(b.netRecu)} net reçu` : null} />
         <Tuile label="Autres frais" valeur={eur(b.frais)} ton="encours" />
         {AVEC_IVA ? <Tuile label="IVA à reverser" valeur={eur(b.ivaAPayer)} ton="info" sous={`${eur(b.ivaCollectee)} collectée, ${eur(b.ivaDeductible)} déductible`} />
           : <Tuile label="Résultat" valeur={eur(b.resultatHT)} ton={b.resultatHT >= 0 ? 'succes' : 'erreur'} />}
@@ -88,13 +74,13 @@ export default function Pro({ ouvrir }) {
       )}
 
       <div className="actions2">
-        <button className="btn btn-second" onClick={exporter} disabled={!b.ops.length}><Download size={18} /> Exporter (Excel)</button>
+        <button className="btn btn-second" onClick={() => aller('exports', { mode: 'mois', ref, secteurs: ['pro'] })}><FileSpreadsheet size={18} /> Exporter (Excel)</button>
         <button className="btn btn-second" onClick={copierCompteRendu}><Copy size={18} /> Copier le compte rendu</button>
       </div>
 
       <h3 className="titre-section">Opérations du mois</h3>
       <ListeOps ops={b.ops} onOuvrir={ouvrir} vide="Aucune opération pro ce mois-ci. Pour Airbnb, notez le montant brut de la réservation en recette, et la commission en frais." />
-      <p className="texte-doux petit note">Astuce Airbnb : notez le prix total payé par le voyageur en recette, puis la commission Airbnb en frais « Commission plateforme ». Le versement reçu sur le compte est la différence.</p>
+      <p className="texte-doux petit note">Astuce : pour chaque réservation, notez le prix total payé par le voyageur, son nom, la référence et les frais de la plateforme. L'application calcule le net reçu.</p>
     </div>
   );
 }

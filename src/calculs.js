@@ -76,11 +76,13 @@ export function bilanPro(ops, periode, activiteId) {
   const rec = o.filter((x) => x.sens === 'rentree');
   const dep = o.filter((x) => x.sens === 'depense');
   const iva = (x) => Number(x.iva_montant) || 0;
-  const recettes = somme(rec), commissions = somme(dep.filter(estCommission)), frais = somme(dep.filter((x) => !estCommission(x)));
+  const fraisResa = somme(rec, (x) => Number(x.frais_plateforme) || 0);
+  const recettes = somme(rec), commissions = arrondi(somme(dep.filter(estCommission)) + fraisResa), frais = somme(dep.filter((x) => !estCommission(x)));
   const ivaCollectee = somme(rec, iva), ivaDeductible = somme(dep, iva);
   const resultatHT = arrondi((recettes - ivaCollectee) - (commissions + frais - ivaDeductible));
   const sansJustif = o.filter((x) => !x.justificatif);
-  return { ops: o, recettes, commissions, frais, ivaCollectee, ivaDeductible, ivaAPayer: arrondi(ivaCollectee - ivaDeductible), resultatHT, sansJustif };
+  const reservations = reservationsDe(o);
+  return { ops: o, recettes, commissions, frais, ivaCollectee, ivaDeductible, ivaAPayer: arrondi(ivaCollectee - ivaDeductible), resultatHT, sansJustif, reservations, netRecu: arrondi(recettes - fraisResa) };
 }
 
 export const ivaDepuisTTC = (ttc, taux) => (taux ? arrondi(Number(ttc) - Number(ttc) / (1 + Number(taux) / 100)) : 0);
@@ -158,4 +160,14 @@ export function bilanProjet(ops, participants) {
     if (deb[i].v <= 0.004) i++; if (cred[j].v <= 0.004) j++;
   }
   return { depenses: arrondi(depenses), recettes: arrondi(recettes), resultat, par, virements, nb: o.length };
+}
+
+// Réservations : les recettes pro, avec voyageur, référence, frais et net reçu
+export function reservationsDe(ops) {
+  return ops.filter((x) => !x.archive && x.espace === 'pro' && x.sens === 'rentree')
+    .map((x) => {
+      const brut = Number(x.montant), fraisP = Number(x.frais_plateforme) || 0;
+      return { ...x, brut: arrondi(brut), fraisP: arrondi(fraisP), net: arrondi(brut - fraisP) };
+    })
+    .sort((a, b) => a.date_op.localeCompare(b.date_op));
 }

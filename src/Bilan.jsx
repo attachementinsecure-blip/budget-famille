@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Info, TrendingUp, TrendingDown } from 'lucide-react';
+import { AlertTriangle, Info, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useApp, useOperations, useFixes } from './contexte.jsx';
 import { NavPeriode, Tabs, Tuile } from './ui.jsx';
@@ -9,7 +9,7 @@ import { fichePersonne, totauxFamille, projectionMois, pointsAttention, evolutio
 const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
 export default function Bilan() {
-  const { profil, membres, estGestionnaire } = useApp();
+  const { profil, membres, estGestionnaire, aller } = useApp();
   const [mode, setMode] = useState('mois');
   const [ref, setRef] = useState(new Date());
   const per = mode === 'mois' ? periodeMois : periodeSemaine;
@@ -56,6 +56,8 @@ export default function Bilan() {
         </p>
         {projection !== null && <p className="bandeau-sous">À ce rythme : environ {eur(projection)} à la fin du mois</p>}
       </section>
+
+      <button className="btn btn-second btn-plein" onClick={() => aller('exports', { mode: mode === 'semaine' ? 'mois' : mode, ref })}><FileSpreadsheet size={18} /> Exporter (mois, trimestre, année)</button>
 
       {pts.length > 0 && <>
         <h3 className="titre-section">Points d'attention</h3>

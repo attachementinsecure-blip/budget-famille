@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { User, Users, BarChart3, Briefcase, Repeat, Home, History, Stethoscope, MoreHorizontal, CloudOff, Wallet, FileUp, Banknote, FolderKanban, Shield } from 'lucide-react';
+import { User, Users, BarChart3, Briefcase, Repeat, Home, History, Stethoscope, MoreHorizontal, CloudOff, Wallet, FileUp, Banknote, FolderKanban, Shield, FileSpreadsheet } from 'lucide-react';
 import { supabase, configOk, messageClair, attente, VERSION, local } from './api.js';
 import { AppCtx } from './contexte.jsx';
 import { FlashProvider, Modal, Champ, useFlash } from './ui.jsx';
@@ -15,6 +15,7 @@ import Saisie from './Saisie.jsx';
 import Import from './Import.jsx';
 import Especes from './Especes.jsx';
 import Projets from './Projets.jsx';
+import Export from './Export.jsx';
 import Confidentialite, { TexteConfidentialite } from './Confidentialite.jsx';
 import { CATEGORIES_DE_BASE } from './format.js';
 
@@ -27,6 +28,7 @@ const PAGES = {
   especes: { label: 'Espèces', icone: Banknote, C: Especes },
   releve: { label: 'Relevé bancaire', icone: FileUp, C: Import },
   projets: { label: 'Projets partagés', icone: FolderKanban, C: Projets },
+  exports: { label: 'Exporter un bilan', icone: FileSpreadsheet, C: Export },
   famille: { label: 'Famille', icone: Home, C: Famille },
   historique: { label: 'Historique', icone: History, C: Historique },
   diagnostic: { label: 'Diagnostic', icone: Stethoscope, C: Diagnostic },
@@ -183,7 +185,8 @@ function Espace({ session }) {
   const estGestionnaire = profil?.role === 'gestionnaire';
   const membres = useMemo(() => tousMembres.filter((m) => m.actif), [tousMembres]);
   const activites = useMemo(() => toutesActivites.filter((a) => !a.archive), [toutesActivites]);
-  const aller = useCallback((k) => { setPage(k); setPlus(false); window.scrollTo(0, 0); }, []);
+  const [params, setParams] = useState(null);
+  const aller = useCallback((k, p = null) => { setParams(p); setPage(k); setPlus(false); window.scrollTo(0, 0); }, []);
   const ctx = useMemo(() => ({ session, profil, membres, tousMembres, activites, toutesActivites, estGestionnaire, rev, rafraichir, aller, motifsPerso, famille }),
     [session, profil, membres, tousMembres, activites, toutesActivites, estGestionnaire, rev, rafraichir, aller, motifsPerso, famille]);
 
@@ -215,7 +218,7 @@ function Espace({ session }) {
               <button className="btn btn-petit btn-primaire" onClick={async () => { const r = await attente.renvoyer(); flash(r.reste ? 'Toujours pas de réseau.' : 'Tout est envoyé.', r.reste ? 'erreur' : 'succes'); rafraichir(); }}>Réessayer</button>
             </div>
           )}
-          <Page ouvrir={(op) => setSaisie(op)} />
+          <Page key={pageSure + (params ? JSON.stringify(params) : '')} params={params} ouvrir={(op) => setSaisie(op)} />
         </main>
 
         <nav className="barre-bas">
