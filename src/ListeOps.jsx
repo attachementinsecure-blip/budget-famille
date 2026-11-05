@@ -17,7 +17,8 @@ export default function ListeOps({ ops, onOuvrir, vide, montrerPayeur }) {
               <strong>{o.libelle || o.categorie}</strong>
               <small>
                 {o.libelle ? o.categorie : ''}
-                {montrerPayeur && o.paye_par ? `${o.libelle ? ' · ' : ''}payé par ${nom(o.paye_par)}` : ''}
+                {montrerPayeur && o.paye_par ? `${o.libelle ? ', ' : ''}payé par ${nom(o.paye_par)}` : ''}
+                {o.voyageur ? `${o.libelle || o.categorie ? ', ' : ''}${o.voyageur}` : ''}{o.ref_resa ? ` (${o.ref_resa})` : ''}
               </small>
             </span>
             <span className="ligne-icones">

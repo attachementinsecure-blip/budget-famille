@@ -3,7 +3,7 @@ import { Paperclip, Eye, Archive } from 'lucide-react';
 import { Modal, Confirmer, SaveBadge, Tabs, ChoixPersonnes, Champ, useFlash } from './ui.jsx';
 import { useApp } from './contexte.jsx';
 import { supabase, enregistrer, envoyerJustificatif, lienJustificatif, local, messageClair, nouvelId } from './api.js';
-import { aujourdhui, categoriesPour, num, arrondi, TAUX_IVA, LIB_ESPACE, AVEC_IVA, MOYENS } from './format.js';
+import { aujourdhui, categoriesPour, num, arrondi, eur, TAUX_IVA, LIB_ESPACE, AVEC_IVA, MOYENS } from './format.js';
 import ChoixCategorie from './Categorie.jsx';
 import { ivaDepuisTTC } from './calculs.js';
 
@@ -24,7 +24,7 @@ export default function Saisie({ initial, onClose }) {
   const cleBrouillon = `brouillon:${initial.espace}:${initial.sens || 'depense'}`;
   const estRetrait = initial.sens === 'retrait';
   const [f, setF] = useState(() => {
-    if (existant) return { ...initial, montant: String(initial.montant).replace('.', ',') };
+    if (existant) return { ...initial, montant: String(initial.montant).replace('.', ','), frais_plateforme: initial.frais_plateforme != null ? String(initial.frais_plateforme).replace('.', ',') : '' };
     const b = local.get(cleBrouillon);
     const base = vierge(initial.espace, initial.sens || 'depense', profil, membres, activites);
     return b ? { ...base, ...b, id: base.id } : { ...base, ...initial, id: base.id };
@@ -64,6 +64,7 @@ export default function Saisie({ initial, onClose }) {
     if (!(montant > 0)) return flash('Indiquez un montant.', 'erreur');
     if (f.espace === 'commun' && (!f.partage || !f.partage.length)) return flash('Choisissez avec qui la dépense est partagée.', 'erreur');
     if (!estRetrait && !String(f.categorie || '').trim()) return flash('Choisissez ou écrivez un motif.', 'erreur');
+    if (f.espace === 'pro' && f.sens === 'rentree' && num(f.frais_plateforme) > montant) return flash('Les frais ne peuvent pas dépasser le montant total.', 'erreur');
     setEnvoi(true); setEtat('encours');
     try {
       let justificatif = f.justificatif;
@@ -80,6 +81,9 @@ export default function Saisie({ initial, onClose }) {
         iva_montant: f.espace === 'pro' && AVEC_IVA ? arrondi(num(ivaAffichee)) : null,
         nif: f.espace === 'pro' ? (f.nif || '').trim() || null : null,
         fournisseur: f.espace === 'pro' ? (f.fournisseur || '').trim() || null : null,
+        voyageur: f.espace === 'pro' && f.sens === 'rentree' ? (f.voyageur || '').trim() || null : null,
+        ref_resa: f.espace === 'pro' && f.sens === 'rentree' ? (f.ref_resa || '').trim().toUpperCase() || null : null,
+        frais_plateforme: f.espace === 'pro' && f.sens === 'rentree' && num(f.frais_plateforme) > 0 ? arrondi(num(f.frais_plateforme)) : null,
         justificatif, fixe_id: f.fixe_id || null, mois_fixe: f.mois_fixe || null,
       };
       if (!existant) ligne.cree_par = profil.id;
@@ -122,7 +126,7 @@ export default function Saisie({ initial, onClose }) {
       )}
       {!estRetrait && <Tabs valeur={f.sens} onChange={changerSens} options={[['depense', f.espace === 'pro' ? 'Frais' : 'Dépense'], ['rentree', f.espace === 'pro' ? 'Recette' : 'Rentrée']]} />}
 
-      <Champ label="Montant (€)">
+      <Champ label={f.espace === 'pro' && f.sens === 'rentree' ? 'Montant total payé par le voyageur (€)' : 'Montant (€)'}>
         <input className="input-montant" inputMode="decimal" placeholder="0,00" value={f.montant} autoFocus={!existant}
           onChange={(e) => maj('montant', e.target.value.replace(/[^0-9,.]/g, ''))} />
       </Champ>
@@ -166,7 +170,16 @@ export default function Saisie({ initial, onClose }) {
               onChange={(e) => { setIvaManuelle(true); maj('iva_montant', e.target.value.replace(/[^0-9,.]/g, '')); }} />
           </Champ>
         </div>}
-        <Champ label={f.sens === 'rentree' ? 'Client ou plateforme' : 'Fournisseur'}><input value={f.fournisseur || ''} onChange={(e) => maj('fournisseur', e.target.value)} /></Champ>
+        <Champ label={f.sens === 'rentree' ? 'Plateforme ou client' : 'Fournisseur'}><input value={f.fournisseur || ''} placeholder={f.sens === 'rentree' ? 'Ex. : Airbnb, Booking, direct' : ''} onChange={(e) => maj('fournisseur', e.target.value)} /></Champ>
+        {f.sens === 'rentree' && <>
+          <div className="grille2">
+            <Champ label="Voyageur"><input value={f.voyageur || ''} placeholder="Nom de la personne" onChange={(e) => maj('voyageur', e.target.value)} /></Champ>
+            <Champ label="Réf. réservation"><input value={f.ref_resa || ''} autoCapitalize="characters" placeholder="Ex. : HMABC123" onChange={(e) => maj('ref_resa', e.target.value)} /></Champ>
+          </div>
+          <Champ label="Frais de la plateforme (€)" aide={num(f.montant) > 0 ? `Net reçu : ${eur(arrondi(num(f.montant) - num(f.frais_plateforme)))}` : 'Le montant total moins ces frais donne le net reçu.'}>
+            <input inputMode="decimal" placeholder="0,00" value={f.frais_plateforme ?? ''} onChange={(e) => maj('frais_plateforme', e.target.value.replace(/[^0-9,.]/g, ''))} />
+          </Champ>
+        </>}
       </>}
 
       {!estRetrait && <Champ groupe label="Justificatif (photo ou PDF)" aide={f.espace === 'pro' ? 'À garder pour la comptabilité.' : null}>
