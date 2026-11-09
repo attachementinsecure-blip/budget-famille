@@ -3,7 +3,7 @@ import { Paperclip, Eye, Archive } from 'lucide-react';
 import { Modal, Confirmer, SaveBadge, Tabs, ChoixPersonnes, Champ, useFlash } from './ui.jsx';
 import { useApp } from './contexte.jsx';
 import { supabase, enregistrer, envoyerJustificatif, lienJustificatif, local, messageClair, nouvelId } from './api.js';
-import { aujourdhui, categoriesPour, num, arrondi, eur, TAUX_IVA, LIB_ESPACE, AVEC_IVA, MOYENS } from './format.js';
+import { aujourdhui, categoriesPour, num, arrondi, eur, TAUX_IVA, LIB_ESPACE, AVEC_IVA } from './format.js';
 import ChoixCategorie from './Categorie.jsx';
 import { ivaDepuisTTC } from './calculs.js';
 
@@ -14,11 +14,13 @@ const vierge = (espace, sens, profil, membres, activites) => ({
   partage: espace === 'commun' ? membres.map((m) => m.id) : null,
   activite_id: espace === 'pro' ? activites[0]?.id || null : null,
   iva_taux: espace === 'pro' && AVEC_IVA ? (sens === 'rentree' ? 6 : 23) : null, iva_montant: null, nif: '', fournisseur: '', justificatif: null,
-  moyen: sens === 'retrait' ? 'especes' : 'carte',
+  moyen: sens === 'retrait' ? 'especes' : 'carte', compte: null,
 });
 
 export default function Saisie({ initial, onClose }) {
   const { profil, membres, activites, rafraichir, famille } = useApp();
+  const comptes = famille?.comptes?.length ? famille.comptes : ['Compte commun'];
+  const coupleCommun = Boolean(famille?.couple_commun);
   const flash = useFlash();
   const existant = Boolean(initial.cree_le);
   const cleBrouillon = `brouillon:${initial.espace}:${initial.sens || 'depense'}`;
@@ -72,8 +74,9 @@ export default function Saisie({ initial, onClose }) {
         id: f.id, espace: estRetrait ? 'perso' : f.espace, sens: f.sens, montant, date_op: f.date_op,
         categorie: estRetrait ? 'Retrait espèces' : String(f.categorie).trim(), libelle: (f.libelle || '').trim() || (estRetrait ? 'Retrait distributeur' : ''),
         moyen: estRetrait ? 'especes' : (f.moyen || null),
+        compte: f.moyen === 'especes' ? null : (f.compte || comptes[0]),
         proprietaire: f.espace === 'perso' ? f.proprietaire : (f.espace === 'commun' ? null : profil.id),
-        paye_par: f.espace === 'commun' ? f.paye_par || null : null,
+        paye_par: f.espace === 'commun' ? (f.moyen === 'especes' ? f.paye_par || profil.id : coupleCommun ? null : f.paye_par || null) : null,
         pour: f.espace === 'commun' ? f.pour || null : null,
         partage: f.espace === 'commun' ? f.partage : null,
         activite_id: f.espace === 'pro' ? f.activite_id : null,
@@ -138,9 +141,10 @@ export default function Saisie({ initial, onClose }) {
         </Champ>}
       </div>
       <Champ label="Description"><input value={f.libelle} placeholder={estRetrait ? 'Ex. : distributeur Continente' : 'Ex. : courses Continente'} onChange={(e) => maj('libelle', e.target.value)} /></Champ>
-      {!estRetrait && <Champ groupe label={f.sens === 'rentree' ? 'Reçu en' : 'Payé en'}>
+      {!estRetrait && <Champ groupe label={f.sens === 'rentree' ? 'Reçu sur' : 'Payé avec'}>
         <div className="choixpers">
-          {MOYENS.map(([k, l]) => <button type="button" key={k} className={f.moyen === k ? 'actif' : ''} aria-pressed={f.moyen === k} onClick={() => maj('moyen', k)}>{l}</button>)}
+          {comptes.map((c) => { const actif = f.moyen !== 'especes' && (f.compte || comptes[0]) === c; return <button type="button" key={c} className={actif ? 'actif' : ''} aria-pressed={actif} onClick={() => setF((x) => ({ ...x, compte: c, moyen: 'carte' }))}>{c}</button>; })}
+          <button type="button" className={f.moyen === 'especes' ? 'actif' : ''} aria-pressed={f.moyen === 'especes'} onClick={() => setF((x) => ({ ...x, compte: null, moyen: 'especes', paye_par: x.espace === 'commun' ? x.paye_par || profil.id : x.paye_par }))}>Espèces</button>
         </div>
       </Champ>}
 
@@ -152,15 +156,23 @@ export default function Saisie({ initial, onClose }) {
             </div>
           </Champ>
         )}
-        <Champ groupe label="Payé par" aide={f.paye_par ? 'Compté dans « qui doit combien à qui ».' : 'Sorti du compte commun : pas de calcul de qui doit quoi.'}>
-          <div className="choixpers">
-            <button type="button" className={!f.paye_par ? 'actif' : ''} aria-pressed={!f.paye_par} onClick={() => maj('paye_par', null)}>Compte commun</button>
-            {membres.map((m) => <button type="button" key={m.id} className={f.paye_par === m.id ? 'actif' : ''} aria-pressed={f.paye_par === m.id} onClick={() => maj('paye_par', m.id)}>{m.prenom}</button>)}
-          </div>
-        </Champ>
-        <Champ groupe label="Partagé entre" aide={f.partage?.length ? `${f.partage.length} personne(s), parts égales` : null}>
+        {f.moyen === 'especes' ? (
+          <Champ groupe label="Porte-monnaie de">
+            <div className="choixpers">
+              {membres.map((m) => <button type="button" key={m.id} className={f.paye_par === m.id ? 'actif' : ''} aria-pressed={f.paye_par === m.id} onClick={() => maj('paye_par', m.id)}>{m.prenom}</button>)}
+            </div>
+          </Champ>
+        ) : !coupleCommun && (
+          <Champ groupe label="Payé par" aide={f.paye_par ? 'Compté dans « qui doit combien à qui ».' : 'Argent du foyer : pas de calcul de qui doit quoi.'}>
+            <div className="choixpers">
+              <button type="button" className={!f.paye_par ? 'actif' : ''} aria-pressed={!f.paye_par} onClick={() => maj('paye_par', null)}>Le foyer</button>
+              {membres.map((m) => <button type="button" key={m.id} className={f.paye_par === m.id ? 'actif' : ''} aria-pressed={f.paye_par === m.id} onClick={() => maj('paye_par', m.id)}>{m.prenom} (perso)</button>)}
+            </div>
+          </Champ>
+        )}
+        {!coupleCommun && <Champ groupe label="Partagé entre" aide={f.partage?.length ? `${f.partage.length} personne(s), parts égales` : null}>
           <ChoixPersonnes membres={membres} valeur={f.partage} multiple onChange={(v) => maj('partage', v)} />
-        </Champ>
+        </Champ>}
       </>}
 
       {f.espace === 'pro' && <>

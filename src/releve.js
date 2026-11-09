@@ -176,17 +176,21 @@ export function proposer(ligne, regles, estGestionnaire) {
   return { espace: 'perso', categorie: 'Autre', origine: 'inconnu', cle };
 }
 
-// Doublons : même date, même montant, même sens qu'une opération déjà enregistrée
-export function marquerDoublons(lignes, existantes) {
-  const pris = new Map();
-  for (const o of existantes) {
-    const k = `${o.date_op}|${Number(o.montant).toFixed(2)}|${o.sens === 'retrait' ? 'depense' : o.sens}`;
-    pris.set(k, (pris.get(k) || 0) + 1);
+// Doublons : même montant, même sens, et une date proche (la banque enregistre souvent 1 à 3 jours plus tard)
+// Chaque opération déjà notée ne peut « absorber » qu'une seule ligne du relevé ; la date exacte est prioritaire.
+const jourNum = (iso) => Math.round(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000);
+export function marquerDoublons(lignes, existantes, ecartJours = 3) {
+  const dispo = existantes.map((o) => ({ j: jourNum(o.date_op), m: Number(o.montant).toFixed(2), s: o.sens === 'retrait' || o.sens === 'transfert' ? 'depense' : o.sens, pris: false }));
+  const sorties = lignes.map((l) => ({ ...l, doublon: false }));
+  // 1er passage : même date ; 2e passage : date proche
+  for (const ecart of [0, ecartJours]) {
+    for (const l of sorties) {
+      if (l.doublon) continue;
+      const j = jourNum(l.date), m = l.montant.toFixed(2);
+      const trouve = dispo.filter((d) => !d.pris && d.m === m && d.s === l.sens && Math.abs(d.j - j) <= ecart)
+        .sort((a, b) => Math.abs(a.j - j) - Math.abs(b.j - j))[0];
+      if (trouve) { trouve.pris = true; l.doublon = true; }
+    }
   }
-  return lignes.map((l) => {
-    const k = `${l.date}|${l.montant.toFixed(2)}|${l.sens}`;
-    const n = pris.get(k) || 0;
-    if (n > 0) { pris.set(k, n - 1); return { ...l, doublon: true }; }
-    return { ...l, doublon: false };
-  });
+  return sorties;
 }

@@ -119,8 +119,26 @@ export function mouvementEspeces(o) {
   if (o.moyen !== 'especes') return 0;
   return o.sens === 'rentree' ? Number(o.montant) : -Number(o.montant);
 }
+// Effet d'une opération sur le porte-monnaie d'une personne (les dons passent d'une poche à l'autre)
+export function effetEspeces(o, uid) {
+  if (o.archive) return 0;
+  if (o.sens === 'transfert') return (o.paye_par === uid ? -Number(o.montant) : 0) + (o.beneficiaire === uid ? Number(o.montant) : 0);
+  return porteur(o) === uid ? mouvementEspeces(o) : 0;
+}
 export function soldeEspeces(ops, uid) {
-  return arrondi(ops.filter((o) => porteur(o) === uid).reduce((s, o) => s + mouvementEspeces(o), 0));
+  return arrondi(ops.reduce((s, o) => s + effetEspeces(o, uid), 0));
+}
+// Sorties d'argent par compte du foyer (dépenses perso et communes)
+export function sortiesParCompte(ops, periode) {
+  const out = {};
+  for (const o of ops) {
+    if (o.archive || !dansPeriode(o, periode)) continue;
+    if (o.sens === 'retrait' && o.compte) { out[o.compte] = (out[o.compte] || 0) + Number(o.montant); continue; }
+    if (o.sens !== 'depense' || o.espace === 'pro') continue;
+    const k = o.moyen === 'especes' ? 'Espèces' : (o.compte || 'Compte non précisé');
+    out[k] = (out[k] || 0) + Number(o.montant);
+  }
+  return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, arrondi(v)]).sort((a, b) => b[1] - a[1]));
 }
 
 // Projets : qui a payé, qui a reçu, qui doit combien à qui

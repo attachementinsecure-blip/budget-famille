@@ -252,7 +252,7 @@ export function construireBilan({
       [5, 6, 7], [12, 16, 20, 24, 18, 14, 16, 13, 10]), nomF('Réservations'));
   }
   if (avec('especes')) {
-    const l = [...especes].sort(parDate).map((x) => { const m = mouvementEspeces(x); return [d(x.date_op), t(nom(porteur(x))), t(x.sens === 'retrait' ? 'Retrait' : m > 0 ? 'Reçu' : 'Dépense'), t(x.categorie), t(x.libelle), ev(m > 0 && m), ev(m < 0 && -m)]; });
+    const l = [...especes].sort(parDate).map((x) => { const m = mouvementEspeces(x); return [d(x.date_op), t(nom(porteur(x))), t(x.sens === 'retrait' ? 'Retrait' : x.sens === 'transfert' ? 'Donné' : m > 0 ? 'Reçu' : 'Dépense'), t(x.categorie), t(x.libelle), ev(m > 0 && m), ev(m < 0 && -m)]; });
     XLSX.utils.book_append_sheet(wb, detail('Espèces (porte-monnaie)', ['Date', 'Personne', 'Mouvement', 'Motif', 'Description', 'Entrée', 'Sortie'], l, [5, 6], [12, 12, 11, 18, 32, 13, 13]), nomF('Espèces'));
   }
   if (avec('projets')) {

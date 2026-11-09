@@ -13,7 +13,10 @@ const estProjet = (e) => String(e).startsWith('projet:');
 const idProjet = (e) => String(e).slice(7);
 
 export default function Import() {
-  const { profil, membres, estGestionnaire, rafraichir } = useApp();
+  const { profil, membres, estGestionnaire, rafraichir, famille } = useApp();
+  const comptesFoyer = famille?.comptes?.length ? famille.comptes : ['Compte commun'];
+  const [compteReleve, setCompteReleve] = useState(null);
+  const [payeurProjet, setPayeurProjet] = useState('moi');
   const [projets, setProjets] = useState([]);
   const flash = useFlash();
   const [fichier, setFichier] = useState(null);
@@ -100,17 +103,18 @@ export default function Import() {
         const pr = projets.find((x) => x.id === idProjet(l.espace));
         const parts = pr?.projet_participants || [];
         const moi = parts.find((x) => x.type === 'personne' && x.profil_id === profil.id) || parts.find((x) => x.type === 'famille' && x.famille_id === profil.famille_id) || parts[0];
+        const qui = payeurProjet === 'compte' ? parts.find((x) => x.type === 'compte') || moi : moi;
         return { id: nouvelId(), projet_id: pr.id, sens: l.sens === 'rentree' ? 'recette' : 'depense', montant: l.montant, date_op: l.date,
-          categorie: String(l.categorie || 'Autre').trim() || 'Autre', libelle: l.libelle.slice(0, 200), parts: [{ participant_id: moi.id, montant: l.montant }], cree_par: profil.id };
+          categorie: String(l.categorie || 'Autre').trim() || 'Autre', libelle: l.libelle.slice(0, 200), parts: [{ participant_id: qui.id, montant: l.montant }], cree_par: profil.id };
       });
       for (const o of opsProjets) { const { error } = await supabase.from('projet_operations').insert(o); if (error) throw error; }
       const ops = gardees.filter((l) => !estProjet(l.espace)).map((l) => l.espace === 'retrait' ? ({
         id: nouvelId(), espace: 'perso', sens: 'retrait', montant: l.montant, date_op: l.date, categorie: 'Retrait espèces', libelle: l.libelle.slice(0, 200),
-        proprietaire: profil.id, moyen: 'especes', cree_par: profil.id,
+        proprietaire: profil.id, moyen: 'especes', compte: compteReleve || comptesFoyer[0], cree_par: profil.id,
       }) : ({
         id: nouvelId(), espace: l.espace, sens: l.sens, montant: l.montant, date_op: l.date, categorie: String(l.categorie || 'Autre').trim() || 'Autre', libelle: l.libelle.slice(0, 200),
         proprietaire: l.espace === 'commun' ? null : profil.id,
-        paye_par: null,
+        paye_par: null, moyen: 'carte', compte: compteReleve || comptesFoyer[0],
         partage: l.espace === 'commun' ? membres.map((m) => m.id) : null,
         cree_par: profil.id,
       }));
@@ -177,7 +181,18 @@ export default function Import() {
         </details>
 
         {lignes.length === 0 ? <Vide>Aucun mouvement trouvé. Vérifiez les colonnes ci-dessus.</Vide> : <>
-          <p className="texte-doux">{lignes.length} mouvement(s) lu(s), {periode}. {lignes.filter((l) => l.doublon).length > 0 && `${lignes.filter((l) => l.doublon).length} déjà enregistré(s), mis de côté.`}</p>
+          <div className="carte reglages-releve">
+            <Champ groupe label="Ce relevé est celui du compte">
+              <div className="choixpers">{comptesFoyer.map((c) => <button type="button" key={c} className={(compteReleve || comptesFoyer[0]) === c ? 'actif' : ''} aria-pressed={(compteReleve || comptesFoyer[0]) === c} onClick={() => setCompteReleve(c)}>{c}</button>)}</div>
+            </Champ>
+            {projets.length > 0 && <Champ groupe label="Dans les projets, c'est payé / reçu par" aide={payeurProjet === 'compte' ? 'Le compte commun du projet (par exemple le compte Lydia avec Vanessa) : pas de dette entre associés.' : 'Vous, avec votre argent : compte dans « qui doit combien ».'}>
+              <div className="choixpers">
+                <button type="button" className={payeurProjet === 'moi' ? 'actif' : ''} aria-pressed={payeurProjet === 'moi'} onClick={() => setPayeurProjet('moi')}>Moi</button>
+                <button type="button" className={payeurProjet === 'compte' ? 'actif' : ''} aria-pressed={payeurProjet === 'compte'} onClick={() => setPayeurProjet('compte')}>Le compte commun du projet</button>
+              </div>
+            </Champ>}
+          </div>
+          <p className="texte-doux">{lignes.length} mouvement(s) lu(s), {periode}. {lignes.filter((l) => l.doublon).length > 0 && `${lignes.filter((l) => l.doublon).length} déjà enregistré(s) (même montant, à 3 jours près), mis de côté. Vérifiez l'onglet « Ignorés » si besoin.`}</p>
           <Tabs valeur={filtre} onChange={setFiltre} options={[['garder', `À garder ${gardees.length}`], ['verifier', `À vérifier ${aVerifier}`], ['ignorer', `Ignorés ${lignes.length - gardees.length}`]]} />
           {visibles.length === 0 ? <Vide>Rien ici.</Vide> : (
             <ul className="liste">

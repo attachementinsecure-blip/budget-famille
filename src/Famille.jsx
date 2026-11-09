@@ -9,6 +9,8 @@ export default function Famille() {
   const { profil, membres, tousMembres, estGestionnaire, rafraichir, famille } = useApp();
   const [nomFamille, setNomFamille] = useState(famille?.nom || '');
   const [nouvelEnfant, setNouvelEnfant] = useState('');
+  const [nouveauCompte, setNouveauCompte] = useState('');
+  const comptesFoyer = famille?.comptes?.length ? famille.comptes : ['Compte commun'];
   const flash = useFlash();
   const [prenom, setPrenom] = useState(profil.prenom);
   const [invits, setInvits] = useState([]);
@@ -113,6 +115,23 @@ export default function Famille() {
             </li>
           ))}
         </ul>}
+
+        <h3 className="titre-section">Comptes du foyer</h3>
+        <p className="texte-doux petit">Ils apparaissent dans « Payé avec » pour savoir d'où sort l'argent (compte commun, Revolut, Sumeria…).</p>
+        <div className="choixpers">
+          {comptesFoyer.map((c) => (
+            <button type="button" key={c} className="actif" onClick={() => comptesFoyer.length > 1 && setConfirm({ texte: `Retirer « ${c} » de la liste ? Les opérations déjà notées gardent ce nom.`, faire: () => action(supabase.from('familles').update({ comptes: comptesFoyer.filter((x) => x !== c) }).eq('id', famille.id), `« ${c} » retiré.`) })}>{c}{comptesFoyer.length > 1 ? ' ✕' : ''}</button>
+          ))}
+        </div>
+        <div className="carte ligne-champ">
+          <input placeholder="Ex. : Revolut" value={nouveauCompte} onChange={(e) => setNouveauCompte(e.target.value)} aria-label="Nom du compte" />
+          <button className="btn btn-primaire" disabled={!nouveauCompte.trim() || comptesFoyer.includes(nouveauCompte.trim())}
+            onClick={async () => { if (await action(supabase.from('familles').update({ comptes: [...comptesFoyer, nouveauCompte.trim()] }).eq('id', famille.id), `Compte « ${nouveauCompte.trim()} » ajouté.`)) setNouveauCompte(''); }}><Plus size={18} /> Ajouter</button>
+        </div>
+        <label className="carte case case-grande">
+          <input type="checkbox" checked={Boolean(famille?.couple_commun)} onChange={(e) => action(supabase.from('familles').update({ couple_commun: e.target.checked }).eq('id', famille.id), e.target.checked ? 'Tout l\'argent du couple est commun : plus de calcul de dettes entre vous.' : 'Le calcul de « qui doit combien » est de retour.')} />
+          <span><strong>Tout l'argent du couple est commun</strong><br /><small className="texte-doux">Plus de « qui doit combien » entre vous dans Commun. Les projets avec d'autres personnes ne changent pas.</small></span>
+        </label>
 
         <h3 className="titre-section">Enfants</h3>
         <p className="texte-doux petit">Les enfants n'ont pas besoin de compte. Leur prénom ajoute une case dans « Commun » pour suivre leurs dépenses (école, vêtements, activités…).</p>

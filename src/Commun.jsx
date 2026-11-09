@@ -28,7 +28,7 @@ export default function Commun({ ouvrir }) {
         <NavPeriode label={p.label} onPrec={() => setRef(decaler(ref, 'mois', -1))} onSuiv={() => setRef(decaler(ref, 'mois', 1))} />
         <p className="bandeau-label">Dépenses communes du foyer</p>
         <p className="bandeau-chiffre">{eur(total)}</p>
-        <p className="bandeau-sous">Ma part : {eur(maPart)}</p>
+        {!famille?.couple_commun && <p className="bandeau-sous">Ma part : {eur(maPart)}</p>}
       </section>
 
       {enfants.length > 0 && (
@@ -48,7 +48,7 @@ export default function Commun({ ouvrir }) {
         <Plus size={22} /> {enfants.includes(filtre) ? `Dépense pour ${filtre}` : 'Dépense commune'}
       </button>
 
-      {virements.length > 0 && <>
+      {!famille?.couple_commun && virements.length > 0 && <>
         <h3 className="titre-section">Pour être à égalité</h3>
         <div className="carte">{virements.map((v, i) => (
           <p key={i} className="virement"><strong>{nom(v.de)}</strong> <ArrowRight size={16} /> <strong>{nom(v.a)}</strong><span>{eur(v.montant)}</span></p>

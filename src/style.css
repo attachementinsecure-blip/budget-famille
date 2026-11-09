@@ -259,3 +259,11 @@ input:focus, select:focus { border-color: var(--accent); outline: none; }
 .recap-resa .recap-total { border-top: 1px solid var(--bord); padding-top: 8px; margin-top: 8px; font-size: 1.05rem; }
 .petit-montant { font-size: 1.4rem; min-height: 52px; }
 .option-edit { display: flex; flex-direction: column; gap: 8px; }
+.sur-bandeau { margin-top: 12px; }
+.sur-bandeau button { min-height: 38px; padding: 6px 12px; font-size: .88rem; }
+.ligne-resume { display: flex; justify-content: space-between; margin: 6px 0; }
+.case-grande { align-items: flex-start; gap: 12px; cursor: pointer; }
+.case-grande input { margin-top: 3px; }
+.choixpers.colonne { flex-direction: column; align-items: stretch; }
+.choixpers.colonne button { border-radius: 12px; text-align: left; }
+.reglages-releve { display: flex; flex-direction: column; gap: 12px; }

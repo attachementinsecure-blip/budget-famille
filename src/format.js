@@ -57,7 +57,7 @@ export function moisDe(p) {
 }
 export const dansPeriode = (op, p) => op.date_op >= p.debut && op.date_op <= p.fin;
 
-export const CAT_DEPENSE = ['Alimentation','Restaurant','Café','Cigarettes','Carburant','Logement','Énergie et eau','Transport','Santé','Enfants','École','Loisirs','Vêtements','Maison','Abonnements','Assurances','Impôts','Cadeaux','Autre'];
+export const CAT_DEPENSE = ['Alimentation','Restaurant','Café','Cigarettes','Carburant','Logement','Énergie et eau','Transport','Santé','Enfants','Argent de poche','École','Loisirs','Vêtements','Maison','Abonnements','Assurances','Impôts','Cadeaux','Autre'];
 export const CAT_RENTREE = ['Salaire','Allocations','Remboursement','Vente','Autre'];
 export const CAT_PRO_RECETTE = ['Réservation Airbnb','Réservation directe','Paiement Stripe','Autre recette'];
 export const CAT_PRO_DEPENSE = ['Commission plateforme','Ménage','Linge','Entretien et réparations','Fournitures','Énergie et eau','Internet','Assurance','Taxes','Comptable','Carburant','Restaurant','Autre frais'];
@@ -80,7 +80,7 @@ export const LIB_CHAMPS = {
   montant: 'Montant', date_op: 'Date', categorie: 'Catégorie', libelle: 'Description', espace: 'Espace',
   sens: 'Type', archive: 'Archivée', paye_par: 'Payé par', partage: 'Partagé entre', iva_taux: 'Taux IVA',
   iva_montant: 'IVA', nif: 'NIF', fournisseur: 'Fournisseur', justificatif: 'Justificatif', prenom: 'Prénom',
-  role: 'Rôle', actif: 'Actif', moyen: 'Payé en', voyageur: 'Voyageur', ref_resa: 'Réf. réservation', frais_plateforme: 'Frais de plateforme', libelle_fixe: 'Libellé', jour: 'Jour', nom: 'Nom', activite_id: 'Activité',
+  role: 'Rôle', actif: 'Actif', moyen: 'Payé en', compte: 'Payé avec', pour: 'Pour', voyageur: 'Voyageur', ref_resa: 'Réf. réservation', frais_plateforme: 'Frais de plateforme', libelle_fixe: 'Libellé', jour: 'Jour', nom: 'Nom', activite_id: 'Activité',
 };
 
 for (const l of [CAT_DEPENSE, CAT_RENTREE, CAT_PRO_RECETTE, CAT_PRO_DEPENSE]) for (const c of l) CATEGORIES_DE_BASE.add(c);

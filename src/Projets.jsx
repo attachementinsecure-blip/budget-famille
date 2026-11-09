@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, ArrowDownCircle, ArrowLeft, ArrowRight, UserPlus, Users, User, Landmark, FileSpreadsheet, FileText, Paperclip, Archive, Send, Percent, BedDouble, Repeat, Settings2, Trash2, ArrowLeftRight, Check } from 'lucide-react';
+import { Plus, ArrowDownCircle, ArrowLeft, ArrowRight, UserPlus, Users, User, Landmark, FileSpreadsheet, FileText, Paperclip, Archive, Send, Percent, BedDouble, Repeat, Settings2, Trash2, ArrowLeftRight, Check, Pencil, Merge } from 'lucide-react';
 import { useApp } from './contexte.jsx';
 import { Modal, Champ, Confirmer, Pastille, Tabs, Vide, NavPeriode, useFlash } from './ui.jsx';
 import { supabase, messageClair, nouvelId } from './api.js';
@@ -41,7 +41,7 @@ export default function Projets({ params }) {
   }
 
   const projet = projets?.find((p) => p.id === choisi);
-  if (projet) return <DetailProjet projet={projet} ops={ops.filter((o) => o.projet_id === projet.id)} fixes={fixes.filter((f) => f.projet_id === projet.id)} retour={() => setChoisi(null)} />;
+  if (projet) return <DetailProjet projet={projet} tous={projets} ops={ops.filter((o) => o.projet_id === projet.id)} fixes={fixes.filter((f) => f.projet_id === projet.id)} retour={() => setChoisi(null)} />;
 
   return (
     <div className="page">
@@ -85,7 +85,7 @@ export default function Projets({ params }) {
   );
 }
 
-function DetailProjet({ projet, ops, fixes, retour }) {
+function DetailProjet({ projet, ops, fixes, retour, tous }) {
   const { profil, famille, membres, rafraichir } = useApp();
   const flash = useFlash();
   const parts = projet.projet_participants || [];
@@ -100,7 +100,10 @@ function DetailProjet({ projet, ops, fixes, retour }) {
   const [options, setOptions] = useState(null);
   const [bilan, setBilan] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [modif, setModif] = useState(null);
+  const [fusion, setFusion] = useState(null);
   const location = projet.type === 'location';
+  const autres = (tous || []).filter((x) => x.id !== projet.id && x.famille_id === projet.famille_id);
 
   async function inviter() {
     const email = invit.email.trim().toLowerCase();
@@ -108,6 +111,9 @@ function DetailProjet({ projet, ops, fixes, retour }) {
     if (invit.type !== 'compte' && !/^\S+@\S+\.\S+$/.test(email)) return flash('Indiquez une adresse e-mail valide.', 'erreur');
     const { data, error } = await supabase.from('projet_participants').insert({ projet_id: projet.id, type: invit.type, nom: invit.nom.trim(), email: invit.type === 'compte' ? null : email }).select().single();
     if (error) return flash(messageClair(error), 'erreur');
+    if (invit.type !== 'compte' && !parts.some((x) => x.type === 'compte') && parts.filter((x) => x.type !== 'compte').length >= 1) {
+      await supabase.from('projet_participants').insert({ projet_id: projet.id, type: 'compte', nom: 'Compte commun' });
+    }
     setInvit(null); rafraichir();
     flash(invit.type === 'compte' ? `${data.nom} ajouté.` : (data.famille_id || data.profil_id) ? `${data.nom} voit maintenant le projet.` : `${data.nom} verra le projet dès qu'il ou elle aura créé son compte.`);
   }
@@ -122,6 +128,17 @@ function DetailProjet({ projet, ops, fixes, retour }) {
       if (navigator.share) await navigator.share({ title: projet.nom, text: texte });
       else { await navigator.clipboard.writeText(texte); flash('Message copié. Collez-le dans WhatsApp, un SMS ou un e-mail.'); }
     } catch (e) { if (e?.name !== 'AbortError') flash('Partage impossible sur cet appareil.', 'erreur'); }
+  }
+  async function enregistrerModif() {
+    if (!modif.nom.trim()) return flash('Donnez un nom au projet.', 'erreur');
+    const { error } = await supabase.from('projets').update({ nom: modif.nom.trim(), description: modif.description.trim(), type: modif.type }).eq('id', projet.id);
+    if (error) return flash(messageClair(error), 'erreur');
+    flash('Projet modifié.'); setModif(null); rafraichir();
+  }
+  async function fusionner() {
+    const { data, error } = await supabase.rpc('fusionner_projets', { p_source: fusion.source, p_cible: projet.id });
+    if (error) return flash(messageClair(error), 'erreur');
+    flash(`Projets regroupés : ${data || 0} opération(s) déplacée(s).`); setFusion(null); rafraichir();
   }
   async function archiver() {
     const { error } = await supabase.from('projets').update({ archive: true }).eq('id', projet.id);
@@ -246,6 +263,12 @@ function DetailProjet({ projet, ops, fixes, retour }) {
 
       {gere && (
         <div className="actions2">
+          <button className="btn btn-second" onClick={() => setModif({ nom: projet.nom, description: projet.description || '', type: projet.type })}><Pencil size={18} /> Modifier le projet</button>
+          <button className="btn btn-second" onClick={() => setFusion({ source: '' })}><Merge size={18} /> Regrouper</button>
+        </div>
+      )}
+      {gere && (
+        <div className="actions2">
           {location && <button className="btn btn-second" onClick={() => setOptions((projet.options || []).map((x) => ({ ...x, prix: String(x.prix).replace('.', ',') })))}><Settings2 size={18} /> Options et prix</button>}
           <button className="btn btn-second" onClick={() => setConfirm({ texte: `Archiver « ${projet.nom} » ? Il disparaît de la liste pour tout le monde, mais rien n'est effacé.`, faire: archiver })}><Archive size={18} /> Archiver</button>
         </div>
@@ -270,6 +293,22 @@ function DetailProjet({ projet, ops, fixes, retour }) {
       {abo && <Abonnement projet={projet} parts={parts} abo={abo} setAbo={setAbo} />}
       {options && <Options projet={projet} options={options} setOptions={setOptions} />}
       {bilan && <Bilan projet={projet} parts={parts} ops={ops} reglage={bilan} setReglage={setBilan} />}
+      {modif && (
+        <Modal titre="Modifier le projet" onClose={() => setModif(null)} pied={<button className="btn btn-primaire" onClick={enregistrerModif}>Enregistrer</button>}>
+          <Tabs valeur={modif.type} onChange={(v) => setModif({ ...modif, type: v })} options={[['location', 'Location saisonnière'], ['general', 'Autre projet']]} />
+          <p className="texte-doux petit">{modif.type === 'location' ? 'Avec le bouton « Réservation » : Airbnb, Booking, direct, options, frais.' : 'Dépenses et recettes, sans réservations.'}</p>
+          <Champ label="Nom du projet"><input value={modif.nom} onChange={(e) => setModif({ ...modif, nom: e.target.value })} /></Champ>
+          <Champ label="Description (facultatif)"><input value={modif.description} onChange={(e) => setModif({ ...modif, description: e.target.value })} /></Champ>
+        </Modal>
+      )}
+      {fusion && (
+        <Modal titre="Regrouper deux projets" onClose={() => setFusion(null)} pied={<button className="btn btn-primaire" disabled={!fusion.source} onClick={() => setConfirm({ texte: `Mettre toutes les opérations de « ${autres.find((x) => x.id === fusion.source)?.nom} » dans « ${projet.nom} » ? L'autre projet sera archivé (rien n'est effacé).`, faire: fusionner })}>Regrouper</button>}>
+          <p className="texte-doux">Toutes les opérations du projet choisi viendront ici, dans <strong>{projet.nom}</strong>. Les participants qui manquent sont ajoutés.</p>
+          {autres.length === 0 ? <p className="texte-doux">Aucun autre projet de votre famille.</p> : (
+            <div className="choixpers colonne">{autres.map((x) => <button type="button" key={x.id} className={fusion.source === x.id ? 'actif' : ''} aria-pressed={fusion.source === x.id} onClick={() => setFusion({ source: x.id })}>{x.nom}</button>)}</div>
+          )}
+        </Modal>
+      )}
       {confirm && <Confirmer texte={confirm.texte} action="Confirmer" danger onOui={() => { confirm.faire(); setConfirm(null); }} onNon={() => setConfirm(null)} />}
     </div>
   );
