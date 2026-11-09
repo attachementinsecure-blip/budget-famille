@@ -1,20 +1,18 @@
 import { useEffect, useState } from 'react';
-import { UserPlus, LogOut, Trash2, Pencil, X, Plus, Send } from 'lucide-react';
+import { UserPlus, LogOut, Trash2, Plus, Send } from 'lucide-react';
 import { useApp } from './contexte.jsx';
-import { Champ, Pastille, Confirmer, Vide, useFlash } from './ui.jsx';
+import { Champ, Pastille, Confirmer, useFlash } from './ui.jsx';
 import { supabase, messageClair } from './api.js';
 import { LIB_ROLE } from './format.js';
 
 export default function Famille() {
-  const { profil, membres, tousMembres, estGestionnaire, rafraichir, activites, toutesActivites, famille } = useApp();
+  const { profil, membres, tousMembres, estGestionnaire, rafraichir, famille } = useApp();
   const [nomFamille, setNomFamille] = useState(famille?.nom || '');
-  const archivees = toutesActivites.filter((a) => a.archive);
-  const [editAct, setEditAct] = useState(null);
+  const [nouvelEnfant, setNouvelEnfant] = useState('');
   const flash = useFlash();
   const [prenom, setPrenom] = useState(profil.prenom);
   const [invits, setInvits] = useState([]);
   const [inv, setInv] = useState({ email: '', prenom: '', role: 'membre' });
-  const [nouvelleAct, setNouvelleAct] = useState('');
   const [confirm, setConfirm] = useState(null);
 
   const chargerInvits = () => estGestionnaire && supabase.from('invitations').select('*').order('cree_le').then(({ data }) => setInvits(data || []));
@@ -116,42 +114,20 @@ export default function Famille() {
           ))}
         </ul>}
 
-        <h3 className="titre-section">Activités pro</h3>
-        <p className="texte-doux petit">Une activité par logement ou par travail (Airbnb, 2e logement, chantier…). Chaque recette ou frais pro est rangé dans une activité.</p>
-        {activites.length === 0 ? <Vide>Aucune activité. Ajoutez-en une ci-dessous.</Vide> : (
-          <ul className="liste">
-            {activites.map((a) => editAct?.id === a.id ? (
-              <li key={a.id} className="carte ligne-champ">
-                <input autoFocus value={editAct.nom} onChange={(e) => setEditAct({ ...editAct, nom: e.target.value })} aria-label="Nouveau nom" />
-                <button className="btn btn-primaire" disabled={!editAct.nom.trim()} onClick={async () => { if (await action(supabase.from('activites').update({ nom: editAct.nom.trim() }).eq('id', a.id), 'Activité renommée.')) setEditAct(null); }}>Enregistrer</button>
-                <button className="btn-icone" aria-label="Annuler" onClick={() => setEditAct(null)}><X size={18} /></button>
-              </li>
-            ) : (
-              <li key={a.id} className="ligne ligne-fixe">
-                <span className="ligne-texte"><strong>{a.nom}</strong></span>
-                <button className="btn-icone" aria-label={`Renommer ${a.nom}`} onClick={() => setEditAct({ id: a.id, nom: a.nom })}><Pencil size={18} /></button>
-                <button className="btn-icone" aria-label={`Supprimer ${a.nom}`} onClick={() => setConfirm({ texte: `Supprimer l'activité « ${a.nom} » ? Elle ne sera plus proposée. Les recettes et frais déjà enregistrés restent dans les bilans.`, faire: () => action(supabase.from('activites').update({ archive: true }).eq('id', a.id), 'Activité supprimée.') })}><Trash2 size={18} /></button>
-              </li>
+        <h3 className="titre-section">Enfants</h3>
+        <p className="texte-doux petit">Les enfants n'ont pas besoin de compte. Leur prénom ajoute une case dans « Commun » pour suivre leurs dépenses (école, vêtements, activités…).</p>
+        {(famille?.enfants || []).length > 0 && (
+          <div className="choixpers">
+            {famille.enfants.map((e) => (
+              <button type="button" key={e} className="actif" onClick={() => setConfirm({ texte: `Retirer la case « ${e} » ? Les dépenses déjà notées restent enregistrées.`, faire: () => action(supabase.from('familles').update({ enfants: famille.enfants.filter((x) => x !== e) }).eq('id', famille.id), `Case « ${e} » retirée.`) })}>{e} ✕</button>
             ))}
-          </ul>
+          </div>
         )}
         <div className="carte ligne-champ">
-          <input placeholder="Nouvelle activité, ex. : 2e logement" value={nouvelleAct} onChange={(e) => setNouvelleAct(e.target.value)} aria-label="Nouvelle activité" />
-          <button className="btn btn-primaire" disabled={!nouvelleAct.trim()} onClick={async () => { if (await action(supabase.from('activites').insert({ nom: nouvelleAct.trim() }), 'Activité ajoutée.')) setNouvelleAct(''); }}><Plus size={18} /> Ajouter</button>
+          <input placeholder="Prénom, ex. : Daniel" value={nouvelEnfant} onChange={(e) => setNouvelEnfant(e.target.value)} aria-label="Prénom de l'enfant" />
+          <button className="btn btn-primaire" disabled={!nouvelEnfant.trim() || (famille?.enfants || []).includes(nouvelEnfant.trim())}
+            onClick={async () => { if (await action(supabase.from('familles').update({ enfants: [...(famille?.enfants || []), nouvelEnfant.trim()] }).eq('id', famille.id), `Case « ${nouvelEnfant.trim()} » ajoutée dans Commun.`)) setNouvelEnfant(''); }}><Plus size={18} /> Ajouter</button>
         </div>
-        {archivees.length > 0 && (
-          <details className="carte">
-            <summary className="texte-doux">Activités supprimées ({archivees.length})</summary>
-            <ul className="liste mt">
-              {archivees.map((a) => (
-                <li key={a.id} className="ligne ligne-fixe inactif-doux">
-                  <span className="ligne-texte"><strong>{a.nom}</strong></span>
-                  <button className="btn btn-petit btn-second" onClick={() => action(supabase.from('activites').update({ archive: false }).eq('id', a.id), `${a.nom} est de retour.`)}>Remettre</button>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
       </>}
 
       <button className="btn btn-second btn-plein deconnexion" onClick={() => supabase.auth.signOut()}><LogOut size={18} /> Se déconnecter</button>

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-export const VERSION = '2.1.0';
-export const VERSION_BASE_ATTENDUE = '2.1.0';
+export const VERSION = '3.0.0';
+export const VERSION_BASE_ATTENDUE = '3.0.0';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;

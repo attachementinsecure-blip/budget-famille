@@ -10,7 +10,7 @@ import { ivaDepuisTTC } from './calculs.js';
 const vierge = (espace, sens, profil, membres, activites) => ({
   id: nouvelId(), espace, sens, montant: '', date_op: aujourdhui(), categorie: categoriesPour(espace, sens)[0], libelle: '',
   proprietaire: espace === 'perso' ? profil.id : null,
-  paye_par: espace === 'commun' ? profil.id : null,
+  paye_par: null, pour: null,
   partage: espace === 'commun' ? membres.map((m) => m.id) : null,
   activite_id: espace === 'pro' ? activites[0]?.id || null : null,
   iva_taux: espace === 'pro' && AVEC_IVA ? (sens === 'rentree' ? 6 : 23) : null, iva_montant: null, nif: '', fournisseur: '', justificatif: null,
@@ -18,7 +18,7 @@ const vierge = (espace, sens, profil, membres, activites) => ({
 });
 
 export default function Saisie({ initial, onClose }) {
-  const { profil, membres, activites, rafraichir, estGestionnaire } = useApp();
+  const { profil, membres, activites, rafraichir, famille } = useApp();
   const flash = useFlash();
   const existant = Boolean(initial.cree_le);
   const cleBrouillon = `brouillon:${initial.espace}:${initial.sens || 'depense'}`;
@@ -38,8 +38,7 @@ export default function Saisie({ initial, onClose }) {
   const premier = useRef(true);
 
   const maj = (k, v) => setF((x) => ({ ...x, [k]: v }));
-  const cats = categoriesPour(f.espace, f.sens);
-  const espacesPermis = estGestionnaire ? ['perso', 'commun', 'pro'] : ['perso', 'commun'];
+  const espacesPermis = ['perso', 'commun'];
 
   // Brouillon gardé automatiquement 1,5 s après la saisie
   useEffect(() => {
@@ -74,7 +73,8 @@ export default function Saisie({ initial, onClose }) {
         categorie: estRetrait ? 'Retrait espèces' : String(f.categorie).trim(), libelle: (f.libelle || '').trim() || (estRetrait ? 'Retrait distributeur' : ''),
         moyen: estRetrait ? 'especes' : (f.moyen || null),
         proprietaire: f.espace === 'perso' ? f.proprietaire : (f.espace === 'commun' ? null : profil.id),
-        paye_par: f.espace === 'commun' ? f.paye_par : null,
+        paye_par: f.espace === 'commun' ? f.paye_par || null : null,
+        pour: f.espace === 'commun' ? f.pour || null : null,
         partage: f.espace === 'commun' ? f.partage : null,
         activite_id: f.espace === 'pro' ? f.activite_id : null,
         iva_taux: f.espace === 'pro' && AVEC_IVA ? Number(f.iva_taux) : null,
@@ -145,7 +145,19 @@ export default function Saisie({ initial, onClose }) {
       </Champ>}
 
       {f.espace === 'commun' && <>
-        <Champ groupe label="Payé par"><ChoixPersonnes membres={membres} valeur={f.paye_par} onChange={(v) => maj('paye_par', v)} /></Champ>
+        {(famille?.enfants || []).length > 0 && (
+          <Champ groupe label="Pour">
+            <div className="choixpers">
+              {[[null, 'Le foyer'], ...famille.enfants.map((e) => [e, e])].map(([k, l]) => <button type="button" key={l} className={(f.pour || null) === k ? 'actif' : ''} aria-pressed={(f.pour || null) === k} onClick={() => maj('pour', k)}>{l}</button>)}
+            </div>
+          </Champ>
+        )}
+        <Champ groupe label="Payé par" aide={f.paye_par ? 'Compté dans « qui doit combien à qui ».' : 'Sorti du compte commun : pas de calcul de qui doit quoi.'}>
+          <div className="choixpers">
+            <button type="button" className={!f.paye_par ? 'actif' : ''} aria-pressed={!f.paye_par} onClick={() => maj('paye_par', null)}>Compte commun</button>
+            {membres.map((m) => <button type="button" key={m.id} className={f.paye_par === m.id ? 'actif' : ''} aria-pressed={f.paye_par === m.id} onClick={() => maj('paye_par', m.id)}>{m.prenom}</button>)}
+          </div>
+        </Champ>
         <Champ groupe label="Partagé entre" aide={f.partage?.length ? `${f.partage.length} personne(s), parts égales` : null}>
           <ChoixPersonnes membres={membres} valeur={f.partage} multiple onChange={(v) => maj('partage', v)} />
         </Champ>

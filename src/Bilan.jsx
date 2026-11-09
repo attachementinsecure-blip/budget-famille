@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, Info, TrendingUp, TrendingDown, FileSpreadsheet } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useApp, useOperations, useFixes } from './contexte.jsx';
-import { NavPeriode, Tabs, Tuile } from './ui.jsx';
+import { NavPeriode, Tabs } from './ui.jsx';
 import { periodeMois, periodeSemaine, decaler, eur, aujourdhui, moisCle } from './format.js';
-import { fichePersonne, totauxFamille, projectionMois, pointsAttention, evolution, bilanPro } from './calculs.js';
+import { fichePersonne, totauxFamille, projectionMois, pointsAttention, evolution } from './calculs.js';
 
 const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
@@ -40,7 +40,6 @@ export default function Bilan() {
   const cats = Object.entries(estGestionnaire ? actuel.parCat : Object.fromEntries(moi.topCats)).sort((a, b) => b[1] - a[1]);
   const maxCat = Math.max(1, ...cats.map((c) => c[1]));
   const personnes = estGestionnaire ? membres : membres.filter((m) => m.id === profil.id);
-  const pro = estGestionnaire ? bilanPro(ops, p) : null, proAvant = estGestionnaire ? bilanPro(ops, avant) : null;
 
   return (
     <div className="page">
@@ -117,13 +116,7 @@ export default function Bilan() {
         </div>
       )}
 
-      {pro && pro.ops.length > 0 && <>
-        <h3 className="titre-section">Activité pro</h3>
-        <div className="tuiles">
-          <Tuile label="Recettes" valeur={eur(pro.recettes)} ton="succes" sous={proAvant.recettes ? `${evolution(pro.recettes, proAvant.recettes)} % vs avant` : null} />
-          <Tuile label="Résultat" valeur={eur(pro.resultatHT)} ton={pro.resultatHT >= 0 ? 'succes' : 'erreur'} />
-        </div>
-      </>}
+      <button className="btn btn-second btn-plein" onClick={() => aller('projets')}>Voir le bilan de chaque projet (locations, pro…)</button>
     </div>
   );
 }

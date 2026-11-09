@@ -123,30 +123,54 @@ export function soldeEspeces(ops, uid) {
   return arrondi(ops.filter((o) => porteur(o) === uid).reduce((s, o) => s + mouvementEspeces(o), 0));
 }
 
-// Projets partagés : qui a payé, qui a reçu, qui doit combien à qui
+// Projets : qui a payé, qui a reçu, qui doit combien à qui
+// - réservation : « montant » = facturé (net + frais + options payées sur place), les frais sont une dépense,
+//   les parts = ce que chacun a réellement reçu (facturé − frais)
+// - versement : argent passé d'un participant à un autre (ne change pas le résultat)
+// - compte commun (SCI…) : son argent appartient aux associés selon leur part
+export const estCompte = (p) => p.type === 'compte';
 export function quotesProjet(participants) {
-  const q = participants.map((p) => (p.quote === null || p.quote === undefined ? null : Number(p.quote)));
-  const perso = q.every((x) => x !== null) && Math.abs(q.reduce((s, x) => s + x, 0) - 100) < 0.01;
-  return Object.fromEntries(participants.map((p, i) => [p.id, perso ? q[i] / 100 : 1 / participants.length]));
+  const pers = participants.filter((p) => !estCompte(p));
+  const q = pers.map((p) => (p.quote === null || p.quote === undefined ? null : Number(p.quote)));
+  const perso = pers.length > 0 && q.every((x) => x !== null) && Math.abs(q.reduce((s, x) => s + x, 0) - 100) < 0.01;
+  const out = Object.fromEntries(participants.map((p) => [p.id, 0]));
+  pers.forEach((p, i) => { out[p.id] = perso ? q[i] / 100 : 1 / pers.length; });
+  return out;
 }
+export const optionsTotal = (opts, surPlace) => arrondi((opts || []).filter((x) => surPlace === undefined || Boolean(x.sur_place) === surPlace)
+  .reduce((s, x) => s + Number(x.prix || 0) * Number(x.quantite || 0), 0));
 export function bilanProjet(ops, participants) {
   const o = ops.filter((x) => !x.archive);
   const quotes = quotesProjet(participants);
-  const par = Object.fromEntries(participants.map((p) => [p.id, { paye: 0, recu: 0, quote: quotes[p.id] }]));
-  let depenses = 0, recettes = 0;
+  const par = Object.fromEntries(participants.map((p) => [p.id, { paye: 0, recu: 0, quote: quotes[p.id], compte: estCompte(p) }]));
+  let facture = 0, fraisP = 0, depenses = 0, versements = 0, nbResa = 0;
   for (const x of o) {
-    if (x.sens === 'depense') depenses += Number(x.montant); else recettes += Number(x.montant);
+    const m = Number(x.montant);
+    if (x.sens === 'versement') {
+      versements += m;
+      if (par[x.de_participant]) par[x.de_participant].paye += m;
+      if (par[x.vers_participant]) par[x.vers_participant].recu += m;
+      continue;
+    }
+    if (x.sens === 'depense') depenses += m;
+    else { facture += m; fraisP += Number(x.frais_plateforme) || 0; if (x.voyageur || x.plateforme || x.ref_resa) nbResa++; }
     for (const pt of x.parts || []) {
       if (!par[pt.participant_id]) continue;
       if (x.sens === 'depense') par[pt.participant_id].paye += Number(pt.montant); else par[pt.participant_id].recu += Number(pt.montant);
     }
   }
-  const resultat = arrondi(recettes - depenses);
+  // L'argent d'un compte commun est réparti entre les associés selon leur part
+  const eff = Object.fromEntries(Object.entries(par).map(([id, v]) => [id, { paye: v.compte ? 0 : v.paye, recu: v.compte ? 0 : v.recu }]));
+  for (const [, v] of Object.entries(par).filter(([, v]) => v.compte)) {
+    for (const [pid, w] of Object.entries(par)) if (!w.compte) { eff[pid].paye += v.paye * w.quote; eff[pid].recu += v.recu * w.quote; }
+  }
+  const resultat = arrondi(facture - fraisP - depenses);
   const net = {};
   for (const [id, v] of Object.entries(par)) {
     v.paye = arrondi(v.paye); v.recu = arrondi(v.recu);
-    v.part = arrondi(resultat * v.quote);          // ce qui lui revient du résultat
-    v.solde = arrondi(v.part - (v.recu - v.paye)); // > 0 : on lui doit de l'argent
+    if (v.compte) { v.part = 0; v.solde = 0; continue; }
+    v.part = arrondi(resultat * v.quote);
+    v.solde = arrondi(v.part - (eff[id].recu - eff[id].paye)); // > 0 : on lui doit de l'argent
     net[id] = v.solde;
   }
   const deb = [], cred = [];
@@ -159,10 +183,14 @@ export function bilanProjet(ops, participants) {
     deb[i].v = arrondi(deb[i].v - m); cred[j].v = arrondi(cred[j].v - m);
     if (deb[i].v <= 0.004) i++; if (cred[j].v <= 0.004) j++;
   }
-  return { depenses: arrondi(depenses), recettes: arrondi(recettes), resultat, par, virements, nb: o.length };
+  return {
+    facture: arrondi(facture), fraisP: arrondi(fraisP), netRecu: arrondi(facture - fraisP), autresDepenses: arrondi(depenses),
+    depenses: arrondi(depenses + fraisP), recettes: arrondi(facture), resultat, versements: arrondi(versements), nbResa,
+    par, virements, nb: o.length,
+  };
 }
 
-// Réservations : les recettes pro, avec voyageur, référence, frais et net reçu
+// Réservations (ancien pro) : recettes avec voyageur, référence, frais et net reçu
 export function reservationsDe(ops) {
   return ops.filter((x) => !x.archive && x.espace === 'pro' && x.sens === 'rentree')
     .map((x) => {

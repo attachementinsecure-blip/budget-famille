@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { User, Users, BarChart3, Briefcase, Repeat, Home, History, Stethoscope, MoreHorizontal, CloudOff, Wallet, FileUp, Banknote, FolderKanban, Shield, FileSpreadsheet } from 'lucide-react';
+import { User, Users, BarChart3, Repeat, Home, History, Stethoscope, MoreHorizontal, CloudOff, Wallet, FileUp, Banknote, FolderKanban, Shield, FileSpreadsheet } from 'lucide-react';
 import { supabase, configOk, messageClair, attente, VERSION, local } from './api.js';
 import { AppCtx } from './contexte.jsx';
 import { FlashProvider, Modal, Champ, useFlash } from './ui.jsx';
 import Moi from './Moi.jsx';
 import Commun from './Commun.jsx';
 import Bilan from './Bilan.jsx';
-import Pro from './Pro.jsx';
 import Fixes from './Fixes.jsx';
 import Famille from './Famille.jsx';
 import Historique from './Historique.jsx';
@@ -23,11 +22,10 @@ const PAGES = {
   moi: { label: 'Moi', icone: User, C: Moi },
   commun: { label: 'Commun', icone: Users, C: Commun },
   bilan: { label: 'Bilan', icone: BarChart3, C: Bilan },
-  pro: { label: 'Pro', icone: Briefcase, C: Pro, gestion: true },
   fixes: { label: 'Fixes', icone: Repeat, C: Fixes },
   especes: { label: 'Espèces', icone: Banknote, C: Especes },
   releve: { label: 'Relevé bancaire', icone: FileUp, C: Import },
-  projets: { label: 'Projets partagés', icone: FolderKanban, C: Projets },
+  projets: { label: 'Projets', icone: FolderKanban, C: Projets },
   exports: { label: 'Exporter un bilan', icone: FileSpreadsheet, C: Export },
   famille: { label: 'Famille', icone: Home, C: Famille },
   historique: { label: 'Historique', icone: History, C: Historique },
@@ -194,7 +192,7 @@ function Espace({ session }) {
   if (!profil) return <Ecran titre="Budget Famille"><p className="texte-doux">Chargement…</p></Ecran>;
 
   const visibles = Object.entries(PAGES).filter(([, p]) => !p.gestion || estGestionnaire).map(([k]) => k);
-  const barre = estGestionnaire ? ['moi', 'commun', 'bilan', 'pro'] : ['moi', 'commun', 'bilan', 'fixes'];
+  const barre = ['moi', 'commun', 'bilan', 'projets'];
   const autres = visibles.filter((k) => !barre.includes(k));
   const pageSure = visibles.includes(page) ? page : 'moi';
   const Page = PAGES[pageSure].C;

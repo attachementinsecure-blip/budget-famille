@@ -74,7 +74,7 @@ function EditFixe({ initial, onClose, profil, membres, estGestionnaire, activite
   });
   const [confirm, setConfirm] = useState(false);
   const maj = (k, v) => setF((x) => ({ ...x, [k]: v }));
-  const espaces = estGestionnaire ? ['perso', 'commun', 'pro'] : ['perso', 'commun'];
+  const espaces = ['perso', 'commun'];
 
   async function valider() {
     const montant = arrondi(num(f.montant));

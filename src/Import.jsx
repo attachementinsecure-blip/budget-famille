@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react';
 import { FileUp, Check, AlertTriangle, Sparkles, Copy } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import { useApp } from './contexte.jsx';
 import { Champ, Pastille, Tabs, Vide, useFlash } from './ui.jsx';
 import { supabase, messageClair, nouvelId } from './api.js';
 import { eur, dateCourte, categoriesPour } from './format.js';
 import ChoixCategorie from './Categorie.jsx';
-import { decoderTexte, lireCsv, detecterColonnes, extraireLignes, proposer, marquerDoublons } from './releve.js';
+import { decoderTexte, lireCsv, detecterColonnes, extraireLignes, proposer, marquerDoublons, cleRegle } from './releve.js';
 
-const ESPACES = { perso: 'Perso', commun: 'Commun', pro: 'Pro', retrait: 'Retrait espèces', ignorer: 'Ignorer' };
+const ESPACES = { perso: 'Perso', commun: 'Commun', retrait: 'Retrait espèces', ignorer: 'Ignorer' };
+const estProjet = (e) => String(e).startsWith('projet:');
+const idProjet = (e) => String(e).slice(7);
 
 export default function Import() {
-  const { profil, membres, activites, estGestionnaire, rafraichir } = useApp();
+  const { profil, membres, estGestionnaire, rafraichir } = useApp();
+  const [projets, setProjets] = useState([]);
   const flash = useFlash();
   const [fichier, setFichier] = useState(null);
   const [rows, setRows] = useState(null);
@@ -45,15 +48,25 @@ export default function Import() {
     const brut = extraireLignes(r, c);
     if (!brut.length) { setLignes([]); return; }
     const dates = brut.map((l) => l.date).sort();
-    const [{ data: existantes }, { data: regles }] = await Promise.all([
+    const [{ data: existantes }, { data: regles }, { data: projetsData }, { data: opsProjets }] = await Promise.all([
       supabase.from('operations').select('date_op,montant,sens').eq('archive', false).gte('date_op', dates[0]).lte('date_op', dates[dates.length - 1]),
       supabase.from('regles').select('*'),
+      supabase.from('projets').select('*, projet_participants(*)').eq('archive', false).order('cree_le'),
+      supabase.from('projet_operations').select('date_op,montant,frais_plateforme,sens').eq('archive', false).gte('date_op', dates[0]).lte('date_op', dates[dates.length - 1]),
     ]);
+    const mesProjets = projetsData || [];
+    setProjets(mesProjets);
     const parCle = Object.fromEntries((regles || []).map((x) => [x.cle, x]));
-    const avec = marquerDoublons(brut, existantes || []).map((l) => {
-      const p = proposer(l, parCle, estGestionnaire);
+    // Les opérations des projets comptent aussi pour repérer les doublons (montant réellement reçu ou payé)
+    const dejaProjets = (opsProjets || []).filter((o) => o.sens !== 'versement').map((o) => ({ date_op: o.date_op, montant: Number(o.montant) - (Number(o.frais_plateforme) || 0), sens: o.sens === 'recette' ? 'rentree' : 'depense' }));
+    const location = mesProjets.find((p) => p.type === 'location') || mesProjets[0];
+    const avec = marquerDoublons(brut, [...(existantes || []), ...dejaProjets]).map((l) => {
+      const regle = parCle[cleRegle(l.libelle)];
+      let p = proposer(l, parCle, estGestionnaire);
+      if (regle?.espace === 'projet') p = mesProjets.some((x) => x.id === regle.projet_id) ? { ...p, espace: 'projet:' + regle.projet_id, categorie: regle.categorie, origine: 'appris' } : { ...p, espace: 'perso', categorie: 'Autre', origine: 'inconnu' };
+      else if (p.espace === 'pro') p = location ? { ...p, espace: 'projet:' + location.id } : { ...p, espace: 'perso', categorie: 'Autre', origine: 'inconnu' };
       const espace = l.doublon ? 'ignorer' : p.espace;
-      return { ...l, ...p, espace, espaceProp: p.espace, activite_id: p.activite_id || activites[0]?.id || null };
+      return { ...l, ...p, espace, espaceProp: p.espace };
     });
     setLignes(avec);
   }
@@ -65,7 +78,7 @@ export default function Import() {
   const maj = (n, champs) => setLignes((ls) => ls.map((l) => (l.n === n ? { ...l, ...champs } : l)));
   function changerEspace(l, espace) {
     if (espace === 'ignorer' || espace === 'retrait') return maj(l.n, { espace, categorie: espace === 'retrait' ? 'Retrait espèces' : l.categorie });
-    const cats = categoriesPour(espace, l.sens);
+    const cats = categoriesPour(estProjet(espace) ? 'pro' : espace, l.sens);
     maj(l.n, { espace, categorie: cats.includes(l.categorie) ? l.categorie : cats[cats.length - 1] });
   }
 
@@ -82,15 +95,23 @@ export default function Import() {
     if (!gardees.length) return;
     setEnvoi(true);
     try {
-      const ops = gardees.map((l) => l.espace === 'retrait' ? ({
+      // Lignes vers un projet : payé ou reçu par moi dans ce projet
+      const opsProjets = gardees.filter((l) => estProjet(l.espace)).map((l) => {
+        const pr = projets.find((x) => x.id === idProjet(l.espace));
+        const parts = pr?.projet_participants || [];
+        const moi = parts.find((x) => x.type === 'personne' && x.profil_id === profil.id) || parts.find((x) => x.type === 'famille' && x.famille_id === profil.famille_id) || parts[0];
+        return { id: nouvelId(), projet_id: pr.id, sens: l.sens === 'rentree' ? 'recette' : 'depense', montant: l.montant, date_op: l.date,
+          categorie: String(l.categorie || 'Autre').trim() || 'Autre', libelle: l.libelle.slice(0, 200), parts: [{ participant_id: moi.id, montant: l.montant }], cree_par: profil.id };
+      });
+      for (const o of opsProjets) { const { error } = await supabase.from('projet_operations').insert(o); if (error) throw error; }
+      const ops = gardees.filter((l) => !estProjet(l.espace)).map((l) => l.espace === 'retrait' ? ({
         id: nouvelId(), espace: 'perso', sens: 'retrait', montant: l.montant, date_op: l.date, categorie: 'Retrait espèces', libelle: l.libelle.slice(0, 200),
         proprietaire: profil.id, moyen: 'especes', cree_par: profil.id,
       }) : ({
         id: nouvelId(), espace: l.espace, sens: l.sens, montant: l.montant, date_op: l.date, categorie: String(l.categorie || 'Autre').trim() || 'Autre', libelle: l.libelle.slice(0, 200),
         proprietaire: l.espace === 'commun' ? null : profil.id,
-        paye_par: l.espace === 'commun' ? profil.id : null,
+        paye_par: null,
         partage: l.espace === 'commun' ? membres.map((m) => m.id) : null,
-        activite_id: l.espace === 'pro' ? l.activite_id : null,
         cree_par: profil.id,
       }));
       for (let i = 0; i < ops.length; i += 200) {
@@ -101,12 +122,11 @@ export default function Import() {
       const regles = {};
       for (const l of lignes) {
         if (l.doublon) continue;
-        if (l.espace === 'pro' && !estGestionnaire) continue;
-        regles[l.cle] = { cle: l.cle, espace: l.espace, sens: l.sens, categorie: l.espace === 'ignorer' ? null : String(l.categorie || '').trim() || null, activite_id: l.espace === 'pro' ? l.activite_id : null, modifie_le: new Date().toISOString() };
+        regles[l.cle] = { cle: l.cle, espace: estProjet(l.espace) ? 'projet' : l.espace, projet_id: estProjet(l.espace) ? idProjet(l.espace) : null, sens: l.sens,
+          categorie: l.espace === 'ignorer' ? null : String(l.categorie || '').trim() || null, modifie_le: new Date().toISOString() };
       }
       await supabase.from('regles').upsert(Object.values(regles));
-      const nbPro = ops.filter((o) => o.espace === 'pro').length;
-      setFini({ nb: ops.length, nbPro });
+      setFini({ nb: ops.length + opsProjets.length, nbPro: opsProjets.length });
       setLignes([]); setRows(null); setFichier(null);
       rafraichir();
     } catch (e) { flash(messageClair(e), 'erreur'); }
@@ -120,7 +140,7 @@ export default function Import() {
         <Check size={28} />
         <p><strong>{fini.nb} opération(s) enregistrée(s).</strong></p>
         <p className="texte-doux">Vos choix sont retenus : au prochain relevé, les mêmes lignes iront directement dans la bonne case.</p>
-        {fini.nbPro > 0 && <p className="point ton-alerte">{fini.nbPro} opération(s) pro ajoutée(s) sans justificatif : ajoutez la facture dans l'onglet Pro.</p>}
+        {fini.nbPro > 0 && <p className="point ton-alerte">{fini.nbPro} opération(s) ajoutée(s) dans vos projets. Pour une réservation, ouvrez-la dans le projet pour ajouter le voyageur, les frais et la facture.</p>}
       </div>
       <button className="btn btn-primaire btn-grand btn-plein" onClick={() => setFini(null)}><FileUp size={20} /> Importer un autre relevé</button>
     </div>
@@ -170,16 +190,13 @@ export default function Import() {
                   </div>
                   <div className="li-choix">
                     <select aria-label="Case" value={l.espace} onChange={(e) => changerEspace(l, e.target.value)}>
-                      {Object.entries(ESPACES).filter(([k]) => (k !== 'pro' || estGestionnaire) && (k !== 'retrait' || l.sens === 'depense')).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      {Object.entries(ESPACES).filter(([k]) => k !== 'retrait' || l.sens === 'depense').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      {projets.length > 0 && <optgroup label="Projets">{projets.map((x) => <option key={x.id} value={'projet:' + x.id}>{x.nom}</option>)}</optgroup>}
                     </select>
                     {l.espace !== 'ignorer' && l.espace !== 'retrait' && (
-                      <ChoixCategorie key={l.espace} compact espace={l.espace} sens={l.sens} valeur={l.categorie} ariaLabel="Catégorie" onChange={(c) => maj(l.n, { categorie: c })} />
+                      <ChoixCategorie key={l.espace} compact espace={estProjet(l.espace) ? 'pro' : l.espace} sens={l.sens} valeur={l.categorie} ariaLabel="Catégorie" onChange={(c) => maj(l.n, { categorie: c })} />
                     )}
-                    {l.espace === 'pro' && activites.length > 1 && (
-                      <select aria-label="Activité" value={l.activite_id || ''} onChange={(e) => maj(l.n, { activite_id: e.target.value })}>
-                        {activites.map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}
-                      </select>
-                    )}
+
                   </div>
                   <div className="li-etat">
                     {l.doublon ? <Pastille ton="info"><Copy size={12} /> Déjà enregistré</Pastille>
